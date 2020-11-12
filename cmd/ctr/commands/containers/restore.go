@@ -38,6 +38,10 @@ var restoreCommand = cli.Command{
 			Name:  "live",
 			Usage: "restore the runtime and memory data from the checkpoint",
 		},
+		cli.StringSliceFlag{
+			Name:  "dynamic-ns",
+			Usage: "specifiy the type of the namespace {ipc|uts|mnt} that is dynamically chosen while restoring",
+		},
 	},
 	Action: func(context *cli.Context) error {
 		id := context.Args().First()

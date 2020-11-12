@@ -75,6 +75,7 @@ func init() {
 	typeurl.Register(&specs.Process{}, prefix, "opencontainers/runtime-spec", major, "Process")
 	typeurl.Register(&specs.LinuxResources{}, prefix, "opencontainers/runtime-spec", major, "LinuxResources")
 	typeurl.Register(&specs.WindowsResources{}, prefix, "opencontainers/runtime-spec", major, "WindowsResources")
+	typeurl.Register(&namespaces.DynamicNamespaces{}, prefix, "containerd/containerd", "DynamicNamespaces")
 }
 
 // New returns a new containerd client that is connected to the containerd

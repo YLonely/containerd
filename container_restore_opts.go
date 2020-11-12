@@ -18,14 +18,21 @@ package containerd
 
 import (
 	"context"
+	"encoding/json"
 
+	crclient "github.com/YLonely/cr-daemon/client"
+	crns "github.com/YLonely/cr-daemon/namespace"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
+	"github.com/containerd/typeurl"
 	"github.com/gogo/protobuf/proto"
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/image-spec/identity"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 )
 
@@ -145,5 +152,79 @@ func WithRestoreRW(ctx context.Context, id string, client *Client, checkpoint Im
 			return err
 		}
 		return nil
+	}
+}
+
+func getDynamicNamespace(t crns.NamespaceType, arg interface{}) (id int, path string, info interface{}, err error) {
+	var client *crclient.Client
+	client, err = crclient.NewDefaultClient()
+	if err != nil {
+		return
+	}
+	id, path, info, err = client.GetNamespace(t, arg)
+	return
+}
+
+func setExternalNamespace(ctx context.Context, client *Client, c *containers.Container, t specs.LinuxNamespaceType, path string) error {
+	var spec oci.Spec
+	var err error
+	if err = json.Unmarshal(c.Spec.Value, &spec); err != nil {
+		return err
+	}
+	ns := specs.LinuxNamespace{
+		Type: specs.UTSNamespace,
+		Path: path,
+	}
+	if err := oci.WithLinuxNamespace(ns)(ctx, client, c, &spec); err != nil {
+		return err
+	}
+	c.Spec.Value, err = json.Marshal(spec)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setNamespaceExtension(ctx context.Context, client *Client, c *containers.Container, t crns.NamespaceType, id int, info interface{}) error {
+	const extensionName = "DynamicNamespaces"
+	namespaceInfo := namespaces.DynamicNamespaceInfo{
+		ID:   id,
+		Info: info,
+	}
+	var dynamicNamespaces namespaces.DynamicNamespaces
+	ok := false
+	if c.Extensions != nil {
+		if any, exists := c.Extensions[extensionName]; exists {
+			data, err := typeurl.UnmarshalAny(&any)
+			if err != nil {
+				return err
+			}
+			dynamicNamespaces = data.(namespaces.DynamicNamespaces)
+			ok = true
+		}
+	}
+	if !ok {
+		dynamicNamespaces = namespaces.DynamicNamespaces{}
+	}
+	dynamicNamespaces[t] = namespaceInfo
+	if err := WithContainerExtension(extensionName, dynamicNamespaces)(ctx, client, c); err != nil {
+		return err
+	}
+	return nil
+}
+
+func WithDynamicUTS(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
+	return func(ctx context.Context, client *Client, c *containers.Container) error {
+		if c.Spec == nil {
+			return errors.New("empty container spec")
+		}
+		id, path, _, err := getDynamicNamespace(crns.UTS, nil)
+		if err != nil {
+			return err
+		}
+		if err := setExternalNamespace(ctx, client, c, specs.UTSNamespace, path); err != nil {
+			return err
+		}
+
 	}
 }
