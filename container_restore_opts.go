@@ -225,6 +225,56 @@ func WithDynamicUTS(ctx context.Context, id string, client *Client, checkpoint I
 		if err := setExternalNamespace(ctx, client, c, specs.UTSNamespace, path); err != nil {
 			return err
 		}
+		if err := setNamespaceExtension(ctx, client, c, crns.UTS, id, nil); err != nil {
+			return err
+		}
+		return nil
+	}
+}
 
+func WithDynamicIPC(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
+	return func(ctx context.Context, client *Client, c *containers.Container) error {
+		if c.Spec == nil {
+			return errors.New("empty container spec")
+		}
+		id, path, _, err := getDynamicNamespace(crns.IPC, nil)
+		if err != nil {
+			return err
+		}
+		if err := setExternalNamespace(ctx, client, c, specs.IPCNamespace, path); err != nil {
+			return err
+		}
+		if err := setNamespaceExtension(ctx, client, c, crns.IPC, id, nil); err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func WithDynamicMNT(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
+	return func(ctx context.Context, client *Client, c *containers.Container) error {
+		if c.Spec == nil {
+			return errors.New("empty container spec")
+		}
+		id, path, _, err := getDynamicNamespace(crns.MNT, nil)
+		if err != nil {
+			return err
+		}
+		if err := setExternalNamespace(ctx, client, c, specs.MountNamespace, path); err != nil {
+			return err
+		}
+		if err := setNamespaceExtension(ctx, client, c, crns.MNT, id, nil); err != nil {
+			return err
+		}
+		name, ok := index.Annotations[checkpointImageNameLabel]
+		if !ok || name == "" {
+			return ErrRuntimeNameNotFoundInIndex
+		}
+		i, err := client.GetImage(ctx, name)
+		if err != nil {
+			return err
+		}
+		c.Image = i.Name()
+		return nil
 	}
 }

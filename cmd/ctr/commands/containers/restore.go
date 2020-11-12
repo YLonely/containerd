@@ -72,9 +72,25 @@ var restoreCommand = cli.Command{
 		}
 
 		opts := []containerd.RestoreOpts{
-			containerd.WithRestoreImage,
 			containerd.WithRestoreSpec,
 			containerd.WithRestoreRuntime,
+		}
+		dynamicMountNamespace := false
+		for _, ns := range context.StringSlice("dynamic-ns") {
+			switch ns {
+			case "mnt":
+				dynamicMountNamespace = true
+				opts = append(opts, containerd.WithDynamicMNT)
+			case "ipc":
+				opts = append(opts, containerd.WithDynamicIPC)
+			case "uts":
+				opts = append(opts, containerd.WithDynamicUTS)
+			default:
+				return errors.New("invalid namespace type")
+			}
+		}
+		if !dynamicMountNamespace {
+			opts = append(opts, containerd.WithRestoreImage)
 		}
 		if context.Bool("rw") {
 			opts = append(opts, containerd.WithRestoreRW)
