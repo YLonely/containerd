@@ -39,7 +39,7 @@ var restoreCommand = cli.Command{
 			Usage: "restore the runtime and memory data from the checkpoint",
 		},
 		cli.StringSliceFlag{
-			Name:  "dynamic-ns",
+			Name:  "external-ns",
 			Usage: "specifiy the type of the namespace {ipc|uts|mnt} that is dynamically chosen while restoring",
 		},
 	},
@@ -75,21 +75,21 @@ var restoreCommand = cli.Command{
 			containerd.WithRestoreSpec,
 			containerd.WithRestoreRuntime,
 		}
-		dynamicMountNamespace := false
-		for _, ns := range context.StringSlice("dynamic-ns") {
+		externalMountNamespace := false
+		for _, ns := range context.StringSlice("external-ns") {
 			switch ns {
 			case "mnt":
-				dynamicMountNamespace = true
-				opts = append(opts, containerd.WithDynamicMNT)
+				externalMountNamespace = true
+				opts = append(opts, containerd.WithExternalMNT)
 			case "ipc":
-				opts = append(opts, containerd.WithDynamicIPC)
+				opts = append(opts, containerd.WithExternalIPC)
 			case "uts":
-				opts = append(opts, containerd.WithDynamicUTS)
+				opts = append(opts, containerd.WithExternalUTS)
 			default:
 				return errors.New("invalid namespace type")
 			}
 		}
-		if !dynamicMountNamespace {
+		if !externalMountNamespace {
 			opts = append(opts, containerd.WithRestoreImage)
 		}
 		if context.Bool("rw") {

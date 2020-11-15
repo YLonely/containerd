@@ -47,6 +47,10 @@ func NewContainer(ctx context.Context, platform stdio.Platform, r *task.CreateTa
 	if err != nil {
 		return nil, errors.Wrap(err, "create namespace")
 	}
+	ne, err := ParseExternalNamespaces(r.ExternalNamespaces)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse external namspaces")
+	}
 
 	var opts options.Options
 	if r.Options != nil {
@@ -136,6 +140,7 @@ func NewContainer(ctx context.Context, platform stdio.Platform, r *task.CreateTa
 		process:         p,
 		processes:       make(map[string]process.Process),
 		reservedProcess: make(map[string]struct{}),
+		ExtNamespaces:   ne,
 	}
 	pid := p.Pid()
 	if pid > 0 {
@@ -241,6 +246,8 @@ type Container struct {
 	ID string
 	// Bundle path
 	Bundle string
+	// ExternalNamespaces
+	ExtNamespaces namespaces.ExternalNamespaces
 
 	// cgroup is either cgroups.Cgroup or *cgroupsv2.Manager
 	cgroup          interface{}

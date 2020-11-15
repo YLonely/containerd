@@ -40,6 +40,7 @@ import (
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/mount"
+	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/pkg/timeout"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/runtime"
@@ -171,6 +172,10 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			return nil, err
 		}
 	}
+	externalNamespaces, err := parseExternalNamespaces(container)
+	if err != nil {
+		return nil, err
+	}
 	opts := runtime.CreateOpts{
 		Spec: container.Spec,
 		IO: runtime.IO{
@@ -179,10 +184,11 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			Stderr:   r.Stderr,
 			Terminal: r.Terminal,
 		},
-		Checkpoint:     checkpointPath,
-		Runtime:        container.Runtime.Name,
-		RuntimeOptions: container.Runtime.Options,
-		TaskOptions:    r.Options,
+		Checkpoint:         checkpointPath,
+		Runtime:            container.Runtime.Name,
+		RuntimeOptions:     container.Runtime.Options,
+		TaskOptions:        r.Options,
+		ExternalNamespaces: externalNamespaces,
 	}
 	for _, m := range r.Rootfs {
 		opts.Rootfs = append(opts.Rootfs, mount.Mount{
@@ -784,4 +790,17 @@ func checkRuntime(current, expected string) bool {
 		}
 	}
 	return true
+}
+
+func parseExternalNamespaces(c *containers.Container) (*ptypes.Any, error) {
+	if c.Extensions == nil {
+		return nil, nil
+	}
+	var any ptypes.Any
+	var exists bool
+	any, exists = c.Extensions[namespaces.ExternalNamespacesExtensionKey]
+	if !exists {
+		return nil, nil
+	}
+	return &any, nil
 }

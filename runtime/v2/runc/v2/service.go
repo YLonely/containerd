@@ -24,11 +24,15 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	cermclient "github.com/YLonely/cer-manager/client"
+	cermns "github.com/YLonely/cer-manager/namespace"
 
 	"github.com/containerd/cgroups"
 	cgroupsv2 "github.com/containerd/cgroups/v2"
@@ -307,6 +311,9 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := populateRootfsWithExternal(r.Bundle, r.ExternalNamespaces); err != nil {
+		return nil, err
+	}
 	container, err := runc.NewContainer(ctx, s.platform, r)
 	if err != nil {
 		return nil, err
@@ -715,6 +722,22 @@ func (s *service) checkProcesses(e runcC.Exit) {
 		if !container.HasPid(e.Pid) {
 			continue
 		}
+		// return external namespaces
+		if container.ExtNamespaces != nil {
+			client, err := cermclient.NewDefaultClient()
+			if err != nil {
+				logrus.WithError(err).Warn("failed to create client of external namespaces")
+			} else {
+				defer client.Close()
+				for _, ns := range []cermns.NamespaceType{cermns.IPC, cermns.MNT, cermns.UTS} {
+					if info, exists := container.ExtNamespaces[ns]; exists {
+						if err = client.PutNamespace(ns, info.ID); err != nil {
+							logrus.WithError(err).Warnf("failed to return namespace of type %s and id %d", ns, info.ID)
+						}
+					}
+				}
+			}
+		}
 
 		for _, p := range container.All() {
 			if p.Pid() != e.Pid {
@@ -799,4 +822,26 @@ func (s *service) initPlatform() error {
 	}
 	s.platform = p
 	return nil
+}
+
+func populateRootfsWithExternal(bundle string, externalNamespaces *ptypes.Any) error {
+	if externalNamespaces == nil {
+		return nil
+	}
+	var en namespaces.ExternalNamespaces
+	var err error
+	var info namespaces.ExternalNamespaceInfo
+	var exists bool
+	en, err = runc.ParseExternalNamespaces(externalNamespaces)
+	if err != nil {
+		return err
+	}
+	if info, exists = en[cermns.MNT]; !exists {
+		return nil
+	}
+	rootfs := path.Join(bundle, "rootfs")
+	externalRootfs := path.Join(info.Info.(string), "rootfs")
+	// mount the external rootfs on rootfs
+	cmd := exec.Command("nsenter", "--mount="+info.Path, "mount", "-R", externalRootfs, rootfs)
+	return cmd.Run()
 }

@@ -20,8 +20,8 @@ import (
 	"context"
 	"encoding/json"
 
-	crclient "github.com/YLonely/cr-daemon/client"
-	crns "github.com/YLonely/cr-daemon/namespace"
+	cermclient "github.com/YLonely/cer-manager/client"
+	cermns "github.com/YLonely/cer-manager/namespace"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
@@ -155,12 +155,13 @@ func WithRestoreRW(ctx context.Context, id string, client *Client, checkpoint Im
 	}
 }
 
-func getDynamicNamespace(t crns.NamespaceType, arg interface{}) (id int, path string, info interface{}, err error) {
-	var client *crclient.Client
-	client, err = crclient.NewDefaultClient()
+func getExternalNamespace(t cermns.NamespaceType, arg interface{}) (id int, path string, info interface{}, err error) {
+	var client *cermclient.Client
+	client, err = cermclient.NewDefaultClient()
 	if err != nil {
 		return
 	}
+	defer client.Close()
 	id, path, info, err = client.GetNamespace(t, arg)
 	return
 }
@@ -185,96 +186,88 @@ func setExternalNamespace(ctx context.Context, client *Client, c *containers.Con
 	return nil
 }
 
-func setNamespaceExtension(ctx context.Context, client *Client, c *containers.Container, t crns.NamespaceType, id int, info interface{}) error {
-	const extensionName = "DynamicNamespaces"
-	namespaceInfo := namespaces.DynamicNamespaceInfo{
+func setNamespaceExtension(ctx context.Context, client *Client, c *containers.Container, t cermns.NamespaceType, id int, path string, info interface{}) error {
+	namespaceInfo := namespaces.ExternalNamespaceInfo{
 		ID:   id,
+		Path: path,
 		Info: info,
 	}
-	var dynamicNamespaces namespaces.DynamicNamespaces
+	var externalNamespaces namespaces.ExternalNamespaces
 	ok := false
 	if c.Extensions != nil {
-		if any, exists := c.Extensions[extensionName]; exists {
+		if any, exists := c.Extensions[namespaces.ExternalNamespacesExtensionKey]; exists {
 			data, err := typeurl.UnmarshalAny(&any)
 			if err != nil {
 				return err
 			}
-			dynamicNamespaces = data.(namespaces.DynamicNamespaces)
+			externalNamespaces = data.(namespaces.ExternalNamespaces)
 			ok = true
 		}
 	}
 	if !ok {
-		dynamicNamespaces = namespaces.DynamicNamespaces{}
+		externalNamespaces = namespaces.ExternalNamespaces{}
 	}
-	dynamicNamespaces[t] = namespaceInfo
-	if err := WithContainerExtension(extensionName, dynamicNamespaces)(ctx, client, c); err != nil {
+	externalNamespaces[t] = namespaceInfo
+	if err := WithContainerExtension(namespaces.ExternalNamespacesExtensionKey, externalNamespaces)(ctx, client, c); err != nil {
 		return err
 	}
 	return nil
 }
 
-func WithDynamicUTS(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
+func WithExternalUTS(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, _, err := getDynamicNamespace(crns.UTS, nil)
+		id, path, _, err := getExternalNamespace(cermns.UTS, nil)
 		if err != nil {
 			return err
 		}
 		if err := setExternalNamespace(ctx, client, c, specs.UTSNamespace, path); err != nil {
 			return err
 		}
-		if err := setNamespaceExtension(ctx, client, c, crns.UTS, id, nil); err != nil {
+		if err := setNamespaceExtension(ctx, client, c, cermns.UTS, id, path, nil); err != nil {
 			return err
 		}
 		return nil
 	}
 }
 
-func WithDynamicIPC(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
+func WithExternalIPC(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, _, err := getDynamicNamespace(crns.IPC, nil)
+		id, path, _, err := getExternalNamespace(cermns.IPC, nil)
 		if err != nil {
 			return err
 		}
 		if err := setExternalNamespace(ctx, client, c, specs.IPCNamespace, path); err != nil {
 			return err
 		}
-		if err := setNamespaceExtension(ctx, client, c, crns.IPC, id, nil); err != nil {
+		if err := setNamespaceExtension(ctx, client, c, cermns.IPC, id, path, nil); err != nil {
 			return err
 		}
 		return nil
 	}
 }
 
-func WithDynamicMNT(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
+func WithExternalMNT(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, _, err := getDynamicNamespace(crns.MNT, nil)
+		id, path, info, err := getExternalNamespace(cermns.MNT, checkpoint.Name())
 		if err != nil {
 			return err
 		}
 		if err := setExternalNamespace(ctx, client, c, specs.MountNamespace, path); err != nil {
 			return err
 		}
-		if err := setNamespaceExtension(ctx, client, c, crns.MNT, id, nil); err != nil {
+		if err := setNamespaceExtension(ctx, client, c, cermns.MNT, id, path, info); err != nil {
 			return err
 		}
-		name, ok := index.Annotations[checkpointImageNameLabel]
-		if !ok || name == "" {
-			return ErrRuntimeNameNotFoundInIndex
-		}
-		i, err := client.GetImage(ctx, name)
-		if err != nil {
-			return err
-		}
-		c.Image = i.Name()
+		c.Image = checkpoint.Name()
 		return nil
 	}
 }

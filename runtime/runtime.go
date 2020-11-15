@@ -48,6 +48,8 @@ type CreateOpts struct {
 	TaskOptions *types.Any
 	// Runtime to use
 	Runtime string
+	// ExternalNamespaces for the task
+	ExternalNamespaces *types.Any
 }
 
 // Exit information for a process
