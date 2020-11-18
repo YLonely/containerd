@@ -98,9 +98,9 @@ func ParseExternalNamespaces(any *types.Any) (namespaces.ExternalNamespaces, err
 	if err != nil {
 		return nil, err
 	}
-	ret, ok := i.(namespaces.ExternalNamespaces)
+	ret, ok := i.(*namespaces.ExternalNamespaces)
 	if !ok {
 		return nil, errors.New("can't convert any to ExternalNamespaces")
 	}
-	return ret, nil
+	return *ret, nil
 }

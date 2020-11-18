@@ -19,6 +19,7 @@ package runtime
 import (
 	"strconv"
 
+	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -31,4 +32,5 @@ func init() {
 	typeurl.Register(&specs.Process{}, prefix, "opencontainers/runtime-spec", major, "Process")
 	typeurl.Register(&specs.LinuxResources{}, prefix, "opencontainers/runtime-spec", major, "LinuxResources")
 	typeurl.Register(&specs.WindowsResources{}, prefix, "opencontainers/runtime-spec", major, "WindowsResources")
+	typeurl.Register(&namespaces.ExternalNamespaces{}, prefix, "containerd/containerd", "ExternalNamespaces")
 }

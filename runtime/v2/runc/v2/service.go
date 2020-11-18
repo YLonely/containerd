@@ -31,8 +31,8 @@ import (
 	"syscall"
 	"time"
 
+	cermns "github.com/YLonely/cer-manager/api/types"
 	cermclient "github.com/YLonely/cer-manager/client"
-	cermns "github.com/YLonely/cer-manager/namespace"
 
 	"github.com/containerd/cgroups"
 	cgroupsv2 "github.com/containerd/cgroups/v2"
@@ -314,6 +314,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	if err := populateRootfsWithExternal(r.Bundle, r.ExternalNamespaces); err != nil {
 		return nil, err
 	}
+
 	container, err := runc.NewContainer(ctx, s.platform, r)
 	if err != nil {
 		return nil, err
@@ -729,7 +730,7 @@ func (s *service) checkProcesses(e runcC.Exit) {
 				logrus.WithError(err).Warn("failed to create client of external namespaces")
 			} else {
 				defer client.Close()
-				for _, ns := range []cermns.NamespaceType{cermns.IPC, cermns.MNT, cermns.UTS} {
+				for _, ns := range []cermns.NamespaceType{cermns.NamespaceIPC, cermns.NamespaceMNT, cermns.NamespaceUTS} {
 					if info, exists := container.ExtNamespaces[ns]; exists {
 						if err = client.PutNamespace(ns, info.ID); err != nil {
 							logrus.WithError(err).Warnf("failed to return namespace of type %s and id %d", ns, info.ID)
@@ -836,7 +837,7 @@ func populateRootfsWithExternal(bundle string, externalNamespaces *ptypes.Any) e
 	if err != nil {
 		return err
 	}
-	if info, exists = en[cermns.MNT]; !exists {
+	if info, exists = en[cermns.NamespaceMNT]; !exists {
 		return nil
 	}
 	rootfs := path.Join(bundle, "rootfs")

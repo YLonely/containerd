@@ -1,6 +1,6 @@
 package namespaces
 
-import cermns "github.com/YLonely/cer-manager/namespace"
+import cermns "github.com/YLonely/cer-manager/api/types"
 
 type ExternalNamespaceInfo struct {
 	ID   int
