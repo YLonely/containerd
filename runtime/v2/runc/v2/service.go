@@ -732,6 +732,11 @@ func (s *service) checkProcesses(e runcC.Exit) {
 				defer client.Close()
 				for _, ns := range []cermns.NamespaceType{cermns.NamespaceIPC, cermns.NamespaceMNT, cermns.NamespaceUTS} {
 					if info, exists := container.ExtNamespaces[ns]; exists {
+						if ns == cermns.NamespaceMNT {
+							if err = depopulateRootfsOfExternal(container.Bundle, info.Path); err != nil {
+								logrus.WithError(err).Warnf("failed to depopulate rootfs %s", container.Bundle)
+							}
+						}
 						if err = client.PutNamespace(ns, info.ID); err != nil {
 							logrus.WithError(err).Warnf("failed to return namespace of type %s and id %d", ns, info.ID)
 						}
@@ -844,5 +849,11 @@ func populateRootfsWithExternal(bundle string, externalNamespaces *ptypes.Any) e
 	externalRootfs := path.Join(info.Info.(string), "rootfs")
 	// mount the external rootfs on rootfs
 	cmd := exec.Command("nsenter", "--mount="+info.Path, "mount", "-R", externalRootfs, rootfs)
+	return cmd.Run()
+}
+
+func depopulateRootfsOfExternal(bundle, mountNamespacePath string) error {
+	rootfs := path.Join(bundle, "rootfs")
+	cmd := exec.Command("nsenter", "--mount="+mountNamespacePath, "umount", "-l", rootfs)
 	return cmd.Run()
 }
