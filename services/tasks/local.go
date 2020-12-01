@@ -31,6 +31,7 @@ import (
 	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/archive"
+	"github.com/containerd/containerd/archive/compression"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
@@ -154,7 +155,8 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 		if err != nil {
 			return nil, err
 		}
-		if r.Checkpoint.MediaType != images.MediaTypeContainerd1Checkpoint {
+		if r.Checkpoint.MediaType != images.MediaTypeContainerd1Checkpoint &&
+			r.Checkpoint.MediaType != images.MediaTypeContainerd1CheckpointGzip {
 			return nil, fmt.Errorf("unsupported checkpoint type %q", r.Checkpoint.MediaType)
 		}
 		reader, err := l.store.ReaderAt(ctx, ocispec.Descriptor{
@@ -166,7 +168,14 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 		if err != nil {
 			return nil, err
 		}
-		_, err = archive.Apply(ctx, checkpointPath, content.NewReader(reader))
+		rd := content.NewReader(reader)
+		if r.Checkpoint.MediaType == images.MediaTypeContainerd1CheckpointGzip {
+			rd, err = compression.DecompressStream(content.NewReader(reader))
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get decompressed stream")
+			}
+		}
+		_, err = archive.Apply(ctx, checkpointPath, rd)
 		reader.Close()
 		if err != nil {
 			return nil, err
@@ -535,7 +544,7 @@ func (l *local) Checkpoint(ctx context.Context, r *api.CheckpointTaskRequest, _ 
 	}
 	// write checkpoint to the content store
 	tar := archive.Diff(ctx, "", image)
-	cp, err := l.writeContent(ctx, images.MediaTypeContainerd1Checkpoint, image, tar)
+	cp, err := l.writeContent(ctx, images.MediaTypeContainerd1CheckpointGzip, image, tar)
 	// close tar first after write
 	if err := tar.Close(); err != nil {
 		return nil, err
@@ -647,7 +656,18 @@ func (l *local) writeContent(ctx context.Context, mediaType, ref string, r io.Re
 		return nil, err
 	}
 	defer writer.Close()
-	size, err := io.Copy(writer, r)
+	var compressed io.WriteCloser
+	var size int64
+	if strings.HasSuffix(mediaType, "gzip") {
+		compressed, err = compression.CompressStream(writer, compression.Gzip)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get compressed stream")
+		}
+		size, err = io.Copy(compressed, r)
+		compressed.Close()
+	} else {
+		size, err = io.Copy(writer, r)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -57,7 +57,8 @@ func WithTaskCheckpoint(im Image) NewTaskOpts {
 			return err
 		}
 		for _, m := range index.Manifests {
-			if m.MediaType == images.MediaTypeContainerd1Checkpoint {
+			if m.MediaType == images.MediaTypeContainerd1Checkpoint ||
+				m.MediaType == images.MediaTypeContainerd1CheckpointGzip {
 				info.Checkpoint = &types.Descriptor{
 					MediaType:   m.MediaType,
 					Size_:       m.Size,
