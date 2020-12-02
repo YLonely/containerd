@@ -51,6 +51,7 @@ import (
 	"github.com/containerd/containerd/services"
 	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
+	"github.com/google/crfs/stargz"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -656,14 +657,10 @@ func (l *local) writeContent(ctx context.Context, mediaType, ref string, r io.Re
 		return nil, err
 	}
 	defer writer.Close()
-	var compressed io.WriteCloser
 	var size int64
 	if strings.HasSuffix(mediaType, "gzip") {
-		compressed, err = compression.CompressStream(writer, compression.Gzip)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get compressed stream")
-		}
-		size, err = io.Copy(compressed, r)
+		compressed := stargz.NewWriter(writer)
+		compressed.AppendTar(r)
 		compressed.Close()
 	} else {
 		size, err = io.Copy(writer, r)
