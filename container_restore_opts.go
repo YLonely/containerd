@@ -219,7 +219,7 @@ func WithExternalUTS(ctx context.Context, id string, client *Client, checkpoint 
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, _, err := getExternalNamespace(cermns.NamespaceUTS, nil)
+		id, path, _, err := getExternalNamespace(cermns.NamespaceUTS, checkpoint.Name())
 		if err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func WithExternalIPC(ctx context.Context, id string, client *Client, checkpoint 
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, _, err := getExternalNamespace(cermns.NamespaceIPC, nil)
+		id, path, _, err := getExternalNamespace(cermns.NamespaceIPC, checkpoint.Name())
 		if err != nil {
 			return err
 		}
