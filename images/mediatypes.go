@@ -40,7 +40,7 @@ const (
 	MediaTypeDockerSchema2ManifestList     = "application/vnd.docker.distribution.manifest.list.v2+json"
 	// Checkpoint/Restore Media Types
 	MediaTypeContainerd1Checkpoint               = "application/vnd.containerd.container.criu.checkpoint.criu.tar"
-	MediaTypeContainerd1CheckpointGzip           = "application/vnd.containerd.container.criu.checkpoint.criu.tar.gzip"
+	MediaTypeContainerd1CheckpointStargz         = "application/vnd.containerd.container.criu.checkpoint.criu.stargz"
 	MediaTypeContainerd1CheckpointPreDump        = "application/vnd.containerd.container.criu.checkpoint.predump.tar"
 	MediaTypeContainerd1Resource                 = "application/vnd.containerd.container.resource.tar"
 	MediaTypeContainerd1RW                       = "application/vnd.containerd.container.rw.tar"

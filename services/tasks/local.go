@@ -157,7 +157,7 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			return nil, err
 		}
 		if r.Checkpoint.MediaType != images.MediaTypeContainerd1Checkpoint &&
-			r.Checkpoint.MediaType != images.MediaTypeContainerd1CheckpointGzip {
+			r.Checkpoint.MediaType != images.MediaTypeContainerd1CheckpointStargz {
 			return nil, fmt.Errorf("unsupported checkpoint type %q", r.Checkpoint.MediaType)
 		}
 		reader, err := l.store.ReaderAt(ctx, ocispec.Descriptor{
@@ -170,7 +170,7 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			return nil, err
 		}
 		rd := content.NewReader(reader)
-		if r.Checkpoint.MediaType == images.MediaTypeContainerd1CheckpointGzip {
+		if r.Checkpoint.MediaType == images.MediaTypeContainerd1CheckpointStargz {
 			rd, err = compression.DecompressStream(content.NewReader(reader))
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to get decompressed stream")
@@ -545,7 +545,7 @@ func (l *local) Checkpoint(ctx context.Context, r *api.CheckpointTaskRequest, _ 
 	}
 	// write checkpoint to the content store
 	tar := archive.Diff(ctx, "", image)
-	cp, err := l.writeContent(ctx, images.MediaTypeContainerd1CheckpointGzip, image, tar)
+	cp, err := l.writeContent(ctx, images.MediaTypeContainerd1CheckpointStargz, image, tar)
 	// close tar first after write
 	if err := tar.Close(); err != nil {
 		return nil, err
@@ -651,6 +651,15 @@ func getTasksMetrics(ctx context.Context, filter filters.Filter, tasks []runtime
 	}
 }
 
+type byteCounter struct {
+	count int64
+}
+
+func (bc *byteCounter) Write(b []byte) (int, error) {
+	bc.count += int64(len(b))
+	return len(b), nil
+}
+
 func (l *local) writeContent(ctx context.Context, mediaType, ref string, r io.Reader) (*types.Descriptor, error) {
 	writer, err := l.store.Writer(ctx, content.WithRef(ref), content.WithDescriptor(ocispec.Descriptor{MediaType: mediaType}))
 	if err != nil {
@@ -658,10 +667,12 @@ func (l *local) writeContent(ctx context.Context, mediaType, ref string, r io.Re
 	}
 	defer writer.Close()
 	var size int64
-	if strings.HasSuffix(mediaType, "gzip") {
-		compressed := stargz.NewWriter(writer)
+	bc := &byteCounter{}
+	if strings.HasSuffix(mediaType, "stargz") {
+		compressed := stargz.NewWriter(io.MultiWriter(writer, bc))
 		compressed.AppendTar(r)
 		compressed.Close()
+		size = bc.count
 	} else {
 		size, err = io.Copy(writer, r)
 	}
