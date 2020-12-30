@@ -77,7 +77,7 @@ func NewTask(ctx gocontext.Context, client *containerd.Client, container contain
 		if err != nil {
 			return nil, err
 		}
-		opts = append(opts, containerd.WithTaskCheckpoint(im))
+		opts = append(opts, containerd.WithTaskCheckpoint(im, false))
 	}
 	var ioCreator cio.Creator
 	if con != nil {

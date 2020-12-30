@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	cermclient "github.com/YLonely/cer-manager/client"
 	api "github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/api/types/task"
@@ -150,26 +151,37 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 	}
 	// jump get checkpointPath from checkpoint image
 	if checkpointPath == "" && r.Checkpoint != nil {
-		checkpointPath, err = ioutil.TempDir(os.Getenv("XDG_RUNTIME_DIR"), "ctrd-checkpoint")
-		if err != nil {
-			return nil, err
-		}
-		if r.Checkpoint.MediaType != images.MediaTypeContainerd1Checkpoint {
-			return nil, fmt.Errorf("unsupported checkpoint type %q", r.Checkpoint.MediaType)
-		}
-		reader, err := l.store.ReaderAt(ctx, ocispec.Descriptor{
-			MediaType:   r.Checkpoint.MediaType,
-			Digest:      r.Checkpoint.Digest,
-			Size:        r.Checkpoint.Size_,
-			Annotations: r.Checkpoint.Annotations,
-		})
-		if err != nil {
-			return nil, err
-		}
-		_, err = archive.Apply(ctx, checkpointPath, content.NewReader(reader))
-		reader.Close()
-		if err != nil {
-			return nil, err
+		if r.Ref != "" {
+			client, err := cermclient.NewDefaultClient()
+			if err != nil {
+				return nil, err
+			}
+			checkpointPath, err = client.GetCheckpoint(r.Ref)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			checkpointPath, err = ioutil.TempDir(os.Getenv("XDG_RUNTIME_DIR"), "ctrd-checkpoint")
+			if err != nil {
+				return nil, err
+			}
+			if r.Checkpoint.MediaType != images.MediaTypeContainerd1Checkpoint {
+				return nil, fmt.Errorf("unsupported checkpoint type %q", r.Checkpoint.MediaType)
+			}
+			reader, err := l.store.ReaderAt(ctx, ocispec.Descriptor{
+				MediaType:   r.Checkpoint.MediaType,
+				Digest:      r.Checkpoint.Digest,
+				Size:        r.Checkpoint.Size_,
+				Annotations: r.Checkpoint.Annotations,
+			})
+			if err != nil {
+				return nil, err
+			}
+			_, err = archive.Apply(ctx, checkpointPath, content.NewReader(reader))
+			reader.Close()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	externalNamespaces, err := parseExternalNamespaces(container)

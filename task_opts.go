@@ -48,8 +48,11 @@ func WithRootFS(mounts []mount.Mount) NewTaskOpts {
 // WithTaskCheckpoint allows a task to be created with live runtime and memory data from a
 // previous checkpoint. Additional software such as CRIU may be required to
 // restore a task from a checkpoint
-func WithTaskCheckpoint(im Image) NewTaskOpts {
+func WithTaskCheckpoint(im Image, useExternalCheckpoint bool) NewTaskOpts {
 	return func(ctx context.Context, c *Client, info *TaskInfo) error {
+		if useExternalCheckpoint {
+			info.Ref = im.Name()
+		}
 		desc := im.Target()
 		id := desc.Digest
 		index, err := decodeIndex(ctx, c.ContentStore(), desc)

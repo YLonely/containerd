@@ -292,6 +292,7 @@ func (c *container) NewTask(ctx context.Context, ioCreate cio.Creator, opts ...N
 		id:     c.id,
 		c:      c,
 	}
+	request.Ref = info.Ref
 	if info.Checkpoint != nil {
 		request.Checkpoint = info.Checkpoint
 	}

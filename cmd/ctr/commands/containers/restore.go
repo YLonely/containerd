@@ -42,6 +42,10 @@ var restoreCommand = cli.Command{
 			Name:  "external-ns",
 			Usage: "specifiy the type of the namespace {ipc|uts|mnt} that is dynamically chosen while restoring",
 		},
+		cli.BoolFlag{
+			Name:  "external-checkpoint",
+			Usage: "get the path of checkpoint files from the container external resources manager",
+		},
 	},
 	Action: func(context *cli.Context) error {
 		id := context.Args().First()
@@ -103,7 +107,7 @@ var restoreCommand = cli.Command{
 
 		topts := []containerd.NewTaskOpts{}
 		if context.Bool("live") {
-			topts = append(topts, containerd.WithTaskCheckpoint(checkpoint))
+			topts = append(topts, containerd.WithTaskCheckpoint(checkpoint, context.Bool("external-checkpoint")))
 		}
 
 		task, err := ctr.NewTask(ctx, cio.NewCreator(cio.WithStdio), topts...)

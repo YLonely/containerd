@@ -23,6 +23,7 @@ file {
     java_outer_classname: "AnyProto"
     java_multiple_files: true
     go_package: "github.com/golang/protobuf/ptypes/any"
+    java_generate_equals_and_hash: true
     objc_class_prefix: "GPB"
     csharp_namespace: "Google.Protobuf.WellKnownTypes"
   }
@@ -471,6 +472,7 @@ file {
     java_outer_classname: "TimestampProto"
     java_multiple_files: true
     go_package: "github.com/golang/protobuf/ptypes/timestamp"
+    java_generate_equals_and_hash: true
     cc_enable_arenas: true
     objc_class_prefix: "GPB"
     csharp_namespace: "Google.Protobuf.WellKnownTypes"
@@ -816,6 +818,7 @@ file {
     java_outer_classname: "EmptyProto"
     java_multiple_files: true
     go_package: "github.com/golang/protobuf/ptypes/empty"
+    java_generate_equals_and_hash: true
     cc_enable_arenas: true
     objc_class_prefix: "GPB"
     csharp_namespace: "Google.Protobuf.WellKnownTypes"
@@ -839,8 +842,7 @@ file {
     java_package: "com.google.protobuf"
     java_outer_classname: "FieldMaskProto"
     java_multiple_files: true
-    go_package: "google.golang.org/genproto/protobuf/field_mask;field_mask"
-    cc_enable_arenas: true
+    java_generate_equals_and_hash: true
     objc_class_prefix: "GPB"
     csharp_namespace: "Google.Protobuf.WellKnownTypes"
   }
@@ -3819,6 +3821,13 @@ file {
       type: TYPE_MESSAGE
       type_name: ".google.protobuf.Any"
       json_name: "options"
+    }
+    field {
+      name: "ref"
+      number: 10
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "ref"
     }
   }
   message_type {
