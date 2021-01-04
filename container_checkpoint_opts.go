@@ -55,44 +55,47 @@ func WithCheckpointImage(ctx context.Context, client *Client, c *containers.Cont
 }
 
 // WithCheckpointTask includes the running task
-func WithCheckpointTask(ctx context.Context, client *Client, c *containers.Container, index *imagespec.Index, copts *options.CheckpointOptions) error {
-	any, err := typeurl.MarshalAny(copts)
-	if err != nil {
+func WithCheckpointTask(compressCheckpoint bool) CheckpointOpts {
+	return func(ctx context.Context, client *Client, c *containers.Container, index *imagespec.Index, copts *options.CheckpointOptions) error {
+		any, err := typeurl.MarshalAny(copts)
+		if err != nil {
+			return nil
+		}
+		task, err := client.TaskService().Checkpoint(ctx, &tasks.CheckpointTaskRequest{
+			ContainerID:        c.ID,
+			Options:            any,
+			CompressCheckpoint: compressCheckpoint,
+		})
+		if err != nil {
+			return err
+		}
+		for _, d := range task.Descriptors {
+			platformSpec := platforms.DefaultSpec()
+			index.Manifests = append(index.Manifests, imagespec.Descriptor{
+				MediaType:   d.MediaType,
+				Size:        d.Size_,
+				Digest:      d.Digest,
+				Platform:    &platformSpec,
+				Annotations: d.Annotations,
+			})
+		}
+		// save copts
+		data, err := any.Marshal()
+		if err != nil {
+			return err
+		}
+		r := bytes.NewReader(data)
+		desc, err := writeContent(ctx, client.ContentStore(), images.MediaTypeContainerd1CheckpointOptions, c.ID+"-checkpoint-options", r)
+		if err != nil {
+			return err
+		}
+		desc.Platform = &imagespec.Platform{
+			OS:           runtime.GOOS,
+			Architecture: runtime.GOARCH,
+		}
+		index.Manifests = append(index.Manifests, desc)
 		return nil
 	}
-	task, err := client.TaskService().Checkpoint(ctx, &tasks.CheckpointTaskRequest{
-		ContainerID: c.ID,
-		Options:     any,
-	})
-	if err != nil {
-		return err
-	}
-	for _, d := range task.Descriptors {
-		platformSpec := platforms.DefaultSpec()
-		index.Manifests = append(index.Manifests, imagespec.Descriptor{
-			MediaType:   d.MediaType,
-			Size:        d.Size_,
-			Digest:      d.Digest,
-			Platform:    &platformSpec,
-			Annotations: d.Annotations,
-		})
-	}
-	// save copts
-	data, err := any.Marshal()
-	if err != nil {
-		return err
-	}
-	r := bytes.NewReader(data)
-	desc, err := writeContent(ctx, client.ContentStore(), images.MediaTypeContainerd1CheckpointOptions, c.ID+"-checkpoint-options", r)
-	if err != nil {
-		return err
-	}
-	desc.Platform = &imagespec.Platform{
-		OS:           runtime.GOOS,
-		Architecture: runtime.GOARCH,
-	}
-	index.Manifests = append(index.Manifests, desc)
-	return nil
 }
 
 // WithCheckpointRuntime includes the container runtime info

@@ -60,7 +60,8 @@ func WithTaskCheckpoint(im Image, useExternalCheckpoint bool) NewTaskOpts {
 			return err
 		}
 		for _, m := range index.Manifests {
-			if m.MediaType == images.MediaTypeContainerd1Checkpoint {
+			if m.MediaType == images.MediaTypeContainerd1Checkpoint ||
+				m.MediaType == images.MediaTypeContainerd1CheckpointStargz {
 				info.Checkpoint = &types.Descriptor{
 					MediaType:   m.MediaType,
 					Size_:       m.Size,

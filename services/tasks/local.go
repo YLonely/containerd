@@ -51,6 +51,7 @@ import (
 	"github.com/containerd/containerd/services"
 	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
+	"github.com/google/crfs/stargz"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -547,7 +548,11 @@ func (l *local) Checkpoint(ctx context.Context, r *api.CheckpointTaskRequest, _ 
 	}
 	// write checkpoint to the content store
 	tar := archive.Diff(ctx, "", image)
-	cp, err := l.writeContent(ctx, images.MediaTypeContainerd1Checkpoint, image, tar)
+	mediaType := images.MediaTypeContainerd1Checkpoint
+	if r.CompressCheckpoint {
+		mediaType = images.MediaTypeContainerd1CheckpointStargz
+	}
+	cp, err := l.writeContent(ctx, mediaType, image, tar)
 	// close tar first after write
 	if err := tar.Close(); err != nil {
 		return nil, err
@@ -653,13 +658,31 @@ func getTasksMetrics(ctx context.Context, filter filters.Filter, tasks []runtime
 	}
 }
 
+type byteCounter struct {
+	count int64
+}
+
+func (bc *byteCounter) Write(b []byte) (int, error) {
+	bc.count += int64(len(b))
+	return len(b), nil
+}
+
 func (l *local) writeContent(ctx context.Context, mediaType, ref string, r io.Reader) (*types.Descriptor, error) {
 	writer, err := l.store.Writer(ctx, content.WithRef(ref), content.WithDescriptor(ocispec.Descriptor{MediaType: mediaType}))
 	if err != nil {
 		return nil, err
 	}
 	defer writer.Close()
-	size, err := io.Copy(writer, r)
+	var size int64
+	bc := &byteCounter{}
+	if strings.HasSuffix(mediaType, "stargz") {
+		compressed := stargz.NewWriter(io.MultiWriter(writer, bc))
+		compressed.AppendTar(r)
+		compressed.Close()
+		size = bc.count
+	} else {
+		size, err = io.Copy(writer, r)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -4197,6 +4197,13 @@ file {
       type_name: ".google.protobuf.Any"
       json_name: "options"
     }
+    field {
+      name: "compress_checkpoint"
+      number: 4
+      label: LABEL_OPTIONAL
+      type: TYPE_BOOL
+      json_name: "compressCheckpoint"
+    }
   }
   message_type {
     name: "CheckpointTaskResponse"

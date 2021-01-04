@@ -180,6 +180,7 @@ message CheckpointTaskRequest {
 	string container_id = 1;
 	string parent_checkpoint = 2 [(gogoproto.customtype) = "github.com/opencontainers/go-digest.Digest", (gogoproto.nullable) = false];
 	google.protobuf.Any options = 3;
+	bool compress_checkpoint = 4;
 }
 
 message CheckpointTaskResponse {

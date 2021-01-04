@@ -98,7 +98,7 @@ func TestCheckpointRestorePTY(t *testing.T) {
 		WithCheckpointRuntime,
 		WithCheckpointRW,
 		WithCheckpointTaskExit,
-		WithCheckpointTask,
+		WithCheckpointTask(false),
 	}...)
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestCheckpointRestorePTY(t *testing.T) {
 		t.Fatal(err)
 	}
 	if task, err = container.NewTask(ctx, direct.IOCreate,
-		WithTaskCheckpoint(checkpoint)); err != nil {
+		WithTaskCheckpoint(checkpoint, false)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -212,7 +212,7 @@ func TestCheckpointRestore(t *testing.T) {
 	checkpoint, err := container.Checkpoint(ctx, testCheckpointName+"restore", []CheckpointOpts{
 		WithCheckpointRuntime,
 		WithCheckpointRW,
-		WithCheckpointTask,
+		WithCheckpointTask(false),
 	}...)
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestCheckpointRestore(t *testing.T) {
 	}...); err != nil {
 		t.Fatal(err)
 	}
-	if task, err = container.NewTask(ctx, empty(), WithTaskCheckpoint(checkpoint)); err != nil {
+	if task, err = container.NewTask(ctx, empty(), WithTaskCheckpoint(checkpoint, false)); err != nil {
 		t.Fatal(err)
 	}
 	defer task.Delete(ctx)
@@ -300,7 +300,7 @@ func TestCheckpointRestoreNewContainer(t *testing.T) {
 	checkpoint, err := container.Checkpoint(ctx, testCheckpointName+"newcontainer", []CheckpointOpts{
 		WithCheckpointRuntime,
 		WithCheckpointRW,
-		WithCheckpointTask,
+		WithCheckpointTask(false),
 	}...)
 	if err != nil {
 		t.Fatal(err)
@@ -322,7 +322,7 @@ func TestCheckpointRestoreNewContainer(t *testing.T) {
 	}...); err != nil {
 		t.Fatal(err)
 	}
-	if task, err = container.NewTask(ctx, empty(), WithTaskCheckpoint(checkpoint)); err != nil {
+	if task, err = container.NewTask(ctx, empty(), WithTaskCheckpoint(checkpoint, false)); err != nil {
 		t.Fatal(err)
 	}
 	defer task.Delete(ctx)
@@ -393,7 +393,7 @@ func TestCheckpointLeaveRunning(t *testing.T) {
 	if _, err := container.Checkpoint(ctx, testCheckpointName+"leaverunning", []CheckpointOpts{
 		WithCheckpointRuntime,
 		WithCheckpointRW,
-		WithCheckpointTask,
+		WithCheckpointTask(false),
 	}...); err != nil {
 		t.Fatal(err)
 	}

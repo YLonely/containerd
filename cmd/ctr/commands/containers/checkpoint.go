@@ -43,6 +43,10 @@ var checkpointCommand = cli.Command{
 			Name:  "task",
 			Usage: "checkpoint container task",
 		},
+		cli.BoolFlag{
+			Name:  "compress-checkpoint",
+			Usage: "use stargz to compress checkpoint files",
+		},
 	},
 	Action: func(context *cli.Context) error {
 		id := context.Args().First()
@@ -69,7 +73,7 @@ var checkpointCommand = cli.Command{
 			opts = append(opts, containerd.WithCheckpointRW)
 		}
 		if context.Bool("task") {
-			opts = append(opts, containerd.WithCheckpointTask)
+			opts = append(opts, containerd.WithCheckpointTask(context.Bool("compress-checkpoint")))
 		}
 		container, err := client.LoadContainer(ctx, id)
 		if err != nil {
