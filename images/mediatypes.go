@@ -121,7 +121,8 @@ func IsLayerType(mt string) bool {
 func IsKnownConfig(mt string) bool {
 	switch mt {
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig,
-		MediaTypeContainerd1Checkpoint, MediaTypeContainerd1CheckpointConfig:
+		MediaTypeContainerd1Checkpoint, MediaTypeContainerd1CheckpointConfig,
+		MediaTypeContainerd1CheckpointStargz:
 		return true
 	}
 	return false

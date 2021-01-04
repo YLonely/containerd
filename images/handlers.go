@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 
+	cermclient "github.com/YLonely/cer-manager/client"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/platforms"
@@ -243,6 +244,34 @@ func FilterPlatforms(f HandlerFunc, m platforms.Matcher) HandlerFunc {
 			}
 		}
 
+		return descs, nil
+	}
+}
+
+// FilterCheckpoints is a handler wrapper which filters out the container checkpoint files
+// if container external resources manager can provide them.
+func FilterCheckpoints(f HandlerFunc, ref string) HandlerFunc {
+	return func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		children, err := f(ctx, desc)
+		if err != nil {
+			return children, err
+		}
+
+		var descs []ocispec.Descriptor
+		cli, err := cermclient.NewDefaultClient()
+		if err != nil {
+			// ignore errors here
+			return children, nil
+		}
+		_, err = cli.GetCheckpoint(ref)
+		if err != nil {
+			return children, nil
+		}
+		for _, c := range children {
+			if c.MediaType != MediaTypeContainerd1CheckpointStargz && c.MediaType != MediaTypeContainerd1Checkpoint {
+				descs = append(descs, c)
+			}
+		}
 		return descs, nil
 	}
 }
