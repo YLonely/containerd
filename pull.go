@@ -18,6 +18,7 @@ package containerd
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
@@ -144,6 +145,25 @@ func (c *Client) fetch(ctx context.Context, rCtx *RemoteContext, ref string, lim
 		converterFunc func(context.Context, ocispec.Descriptor) (ocispec.Descriptor, error)
 		limiter       *semaphore.Weighted
 	)
+
+	if desc.MediaType == images.MediaTypeDockerSchema2ManifestList && rCtx.PlatformMatcher != nil {
+		rd, err := fetcher.Fetch(ctx, desc)
+		if err != nil {
+			return images.Image{}, err
+		}
+		defer rd.Close()
+		index := &ocispec.Index{}
+		d := json.NewDecoder(rd)
+		if err = d.Decode(&index); err != nil {
+			return images.Image{}, err
+		}
+		for _, m := range index.Manifests {
+			if m.Platform != nil && rCtx.PlatformMatcher.Match(*m.Platform) {
+				desc = m
+				break
+			}
+		}
+	}
 
 	if desc.MediaType == images.MediaTypeDockerSchema1Manifest && rCtx.ConvertSchema1 {
 		schema1Converter := schema1.NewConverter(store, fetcher)
