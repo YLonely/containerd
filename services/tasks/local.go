@@ -677,6 +677,7 @@ func (l *local) writeContent(ctx context.Context, mediaType, ref string, r io.Re
 	bc := &byteCounter{}
 	if strings.HasSuffix(mediaType, "stargz") {
 		compressed := stargz.NewWriter(io.MultiWriter(writer, bc))
+		compressed.ChunkSize = 1 << 19
 		compressed.AppendTar(r)
 		compressed.Close()
 		size = bc.count
