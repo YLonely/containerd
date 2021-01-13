@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 
@@ -142,6 +143,9 @@ func NewContainer(ctx context.Context, platform stdio.Platform, r *task.CreateTa
 		reservedProcess: make(map[string]struct{}),
 		ExtNamespaces:   ne,
 	}
+	if r.ExternalCheckpoint {
+		container.ExtCheckpointName = path.Base(r.Checkpoint)
+	}
 	pid := p.Pid()
 	if pid > 0 {
 		var cg interface{}
@@ -247,7 +251,8 @@ type Container struct {
 	// Bundle path
 	Bundle string
 	// ExternalNamespaces
-	ExtNamespaces namespaces.ExternalNamespaces
+	ExtNamespaces     namespaces.ExternalNamespaces
+	ExtCheckpointName string
 
 	// cgroup is either cgroups.Cgroup or *cgroupsv2.Manager
 	cgroup          interface{}

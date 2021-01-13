@@ -150,9 +150,11 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 	if err != nil {
 		return nil, err
 	}
+	externalCheckpoint := false
 	// jump get checkpointPath from checkpoint image
 	if checkpointPath == "" && r.Checkpoint != nil {
 		if r.Ref != "" {
+			externalCheckpoint = true
 			client, err := cermclient.NewDefaultClient()
 			if err != nil {
 				return nil, err
@@ -198,6 +200,7 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			Terminal: r.Terminal,
 		},
 		Checkpoint:         checkpointPath,
+		ExternalCheckpoint: externalCheckpoint,
 		Runtime:            container.Runtime.Name,
 		RuntimeOptions:     container.Runtime.Options,
 		TaskOptions:        r.Options,

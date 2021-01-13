@@ -52,6 +52,8 @@ func WithTaskCheckpoint(im Image, useExternalCheckpoint bool) NewTaskOpts {
 	return func(ctx context.Context, c *Client, info *TaskInfo) error {
 		if useExternalCheckpoint {
 			info.Ref = im.Name()
+			info.Checkpoint = &types.Descriptor{}
+			return nil
 		}
 		desc := im.Target()
 		id := desc.Digest

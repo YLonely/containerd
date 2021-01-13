@@ -47,6 +47,7 @@ message CreateTaskRequest {
 	string parent_checkpoint = 9;
 	google.protobuf.Any options = 10;
 	google.protobuf.Any external_namespaces = 11;
+	bool external_checkpoint = 12;
 }
 
 message CreateTaskResponse {

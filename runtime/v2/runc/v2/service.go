@@ -742,6 +742,11 @@ func (s *service) checkProcesses(e runcC.Exit) {
 						}
 					}
 				}
+				if container.ExtCheckpointName != "" {
+					if err = client.PutCheckpoint(container.ExtCheckpointName); err != nil {
+						logrus.WithError(err).Warnf("failed to return checkpoint %q", container.ExtCheckpointName)
+					}
+				}
 			}
 		}
 
