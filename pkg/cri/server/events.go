@@ -330,7 +330,6 @@ func handleContainerExit(ctx context.Context, e *eventtypes.TaskExit, cntr conta
 			status.FinishedAt = e.ExitedAt.UnixNano()
 			status.ExitCode = int32(e.ExitStatus)
 		}
-
 		// Unknown state can only transit to EXITED state, so we need
 		// to handle unknown state here.
 		if status.Unknown {

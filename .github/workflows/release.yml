@@ -62,7 +62,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v1
         with:
-          go-version: '1.15.2'
+          go-version: '1.15.5'
 
       - name: Set env
         shell: bash
@@ -75,10 +75,10 @@ jobs:
           [[ "${MOS}" =~ "windows" ]] && {
             os=windows
           }
-          echo "::set-env name=RELEASE_VER::${releasever}"
-          echo "::set-env name=GOPATH::${{ github.workspace }}"
-          echo "::set-env name=OS::${os}"
-          echo "::add-path::${{ github.workspace }}/bin"
+          echo "RELEASE_VER=${releasever}" >> $GITHUB_ENV
+          echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
+          echo "OS=${os}" >> $GITHUB_ENV
+          echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
 
       - name: Checkout containerd
         uses: actions/checkout@v2
