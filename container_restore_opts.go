@@ -20,12 +20,12 @@ import (
 	"context"
 	"encoding/json"
 
-	cermns "github.com/YLonely/cer-manager/api/types"
+	cmtypes "github.com/YLonely/cer-manager/api/types"
 	cermclient "github.com/YLonely/cer-manager/client"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/typeurl"
 	"github.com/gogo/protobuf/proto"
@@ -155,14 +155,14 @@ func WithRestoreRW(ctx context.Context, id string, client *Client, checkpoint Im
 	}
 }
 
-func getExternalNamespace(t cermns.NamespaceType, arg interface{}) (id int, path string, info interface{}, err error) {
+func getExternalNamespace(t cmtypes.NamespaceType, ref cmtypes.Reference) (id int, path string, info interface{}, err error) {
 	var client *cermclient.Client
-	client, err = cermclient.NewDefaultClient()
+	client, err = cermclient.Default()
 	if err != nil {
 		return
 	}
 	defer client.Close()
-	id, path, info, err = client.GetNamespace(t, arg)
+	id, path, info, err = client.GetNamespace(t, ref)
 	return
 }
 
@@ -186,29 +186,31 @@ func setExternalNamespace(ctx context.Context, client *Client, c *containers.Con
 	return nil
 }
 
-func setNamespaceExtension(ctx context.Context, client *Client, c *containers.Container, t cermns.NamespaceType, id int, path string, info interface{}) error {
-	namespaceInfo := namespaces.ExternalNamespaceInfo{
+func setNamespaceExtension(ctx context.Context, client *Client, c *containers.Container, t cmtypes.NamespaceType, id int, path string, info interface{}) error {
+	namespaceInfo := external.NamespaceInfo{
 		ID:   id,
 		Path: path,
 		Info: info,
 	}
-	var externalNamespaces *namespaces.ExternalNamespaces
+	var resourcesInfo *external.ResourcesInfo
 	ok := false
 	if c.Extensions != nil {
-		if any, exists := c.Extensions[namespaces.ExternalNamespacesExtensionKey]; exists {
+		if any, exists := c.Extensions[external.ResourcesExtensionKey]; exists {
 			data, err := typeurl.UnmarshalAny(&any)
 			if err != nil {
 				return err
 			}
-			externalNamespaces = data.(*namespaces.ExternalNamespaces)
+			resourcesInfo = data.(*external.ResourcesInfo)
 			ok = true
 		}
 	}
 	if !ok {
-		externalNamespaces = &namespaces.ExternalNamespaces{}
+		resourcesInfo = &external.ResourcesInfo{
+			Namespaces: map[cmtypes.NamespaceType]external.NamespaceInfo{},
+		}
 	}
-	(*externalNamespaces)[t] = namespaceInfo
-	if err := WithContainerExtension(namespaces.ExternalNamespacesExtensionKey, externalNamespaces)(ctx, client, c); err != nil {
+	resourcesInfo.Namespaces[t] = namespaceInfo
+	if err := WithContainerExtension(external.ResourcesExtensionKey, resourcesInfo)(ctx, client, c); err != nil {
 		return err
 	}
 	return nil
@@ -219,14 +221,14 @@ func WithExternalUTS(ctx context.Context, id string, client *Client, checkpoint 
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, _, err := getExternalNamespace(cermns.NamespaceUTS, checkpoint.Name())
+		id, path, _, err := getExternalNamespace(cmtypes.NamespaceUTS, cmtypes.NewContainerdReference(checkpoint.Name(), client.defaultns))
 		if err != nil {
 			return err
 		}
 		if err := setExternalNamespace(ctx, client, c, specs.UTSNamespace, path); err != nil {
 			return err
 		}
-		if err := setNamespaceExtension(ctx, client, c, cermns.NamespaceUTS, id, path, nil); err != nil {
+		if err := setNamespaceExtension(ctx, client, c, cmtypes.NamespaceUTS, id, path, nil); err != nil {
 			return err
 		}
 		return nil
@@ -238,14 +240,14 @@ func WithExternalIPC(ctx context.Context, id string, client *Client, checkpoint 
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, _, err := getExternalNamespace(cermns.NamespaceIPC, checkpoint.Name())
+		id, path, _, err := getExternalNamespace(cmtypes.NamespaceIPC, cmtypes.NewContainerdReference(checkpoint.Name(), client.defaultns))
 		if err != nil {
 			return err
 		}
 		if err := setExternalNamespace(ctx, client, c, specs.IPCNamespace, path); err != nil {
 			return err
 		}
-		if err := setNamespaceExtension(ctx, client, c, cermns.NamespaceIPC, id, path, nil); err != nil {
+		if err := setNamespaceExtension(ctx, client, c, cmtypes.NamespaceIPC, id, path, nil); err != nil {
 			return err
 		}
 		return nil
@@ -257,14 +259,14 @@ func WithExternalMNT(ctx context.Context, id string, client *Client, checkpoint 
 		if c.Spec == nil {
 			return errors.New("empty container spec")
 		}
-		id, path, info, err := getExternalNamespace(cermns.NamespaceMNT, checkpoint.Name())
+		id, path, info, err := getExternalNamespace(cmtypes.NamespaceMNT, cmtypes.NewContainerdReference(checkpoint.Name(), client.defaultns))
 		if err != nil {
 			return err
 		}
 		if err := setExternalNamespace(ctx, client, c, specs.MountNamespace, path); err != nil {
 			return err
 		}
-		if err := setNamespaceExtension(ctx, client, c, cermns.NamespaceMNT, id, path, info); err != nil {
+		if err := setNamespaceExtension(ctx, client, c, cmtypes.NamespaceMNT, id, path, info); err != nil {
 			return err
 		}
 		c.Image = checkpoint.Name()

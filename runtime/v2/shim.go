@@ -268,16 +268,15 @@ func (s *shim) Create(ctx context.Context, opts runtime.CreateOpts) (runtime.Tas
 		topts = opts.RuntimeOptions
 	}
 	request := &task.CreateTaskRequest{
-		ID:                 s.ID(),
-		Bundle:             s.bundle.Path,
-		Stdin:              opts.IO.Stdin,
-		Stdout:             opts.IO.Stdout,
-		Stderr:             opts.IO.Stderr,
-		Terminal:           opts.IO.Terminal,
-		Checkpoint:         opts.Checkpoint,
-		Options:            topts,
-		ExternalNamespaces: opts.ExternalNamespaces,
-		ExternalCheckpoint: opts.ExternalCheckpoint,
+		ID:                s.ID(),
+		Bundle:            s.bundle.Path,
+		Stdin:             opts.IO.Stdin,
+		Stdout:            opts.IO.Stdout,
+		Stderr:            opts.IO.Stderr,
+		Terminal:          opts.IO.Terminal,
+		Checkpoint:        opts.Checkpoint,
+		Options:           topts,
+		ExternalResources: opts.ExternalResources,
 	}
 	for _, m := range opts.Rootfs {
 		request.Rootfs = append(request.Rootfs, &types.Mount{

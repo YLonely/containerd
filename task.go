@@ -140,7 +140,6 @@ type TaskInfo struct {
 	// Options hold runtime specific settings for task creation
 	Options interface{}
 	runtime string
-	Ref     string
 }
 
 // Runtime name for the container

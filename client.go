@@ -45,6 +45,7 @@ import (
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/leases"
 	leasesproxy "github.com/containerd/containerd/leases/proxy"
@@ -75,7 +76,7 @@ func init() {
 	typeurl.Register(&specs.Process{}, prefix, "opencontainers/runtime-spec", major, "Process")
 	typeurl.Register(&specs.LinuxResources{}, prefix, "opencontainers/runtime-spec", major, "LinuxResources")
 	typeurl.Register(&specs.WindowsResources{}, prefix, "opencontainers/runtime-spec", major, "WindowsResources")
-	typeurl.Register(&namespaces.ExternalNamespaces{}, prefix, "containerd/containerd", "ExternalNamespaces")
+	typeurl.Register(&external.ResourcesInfo{}, prefix, "containerd/containerd", "ExternalResources")
 }
 
 // New returns a new containerd client that is connected to the containerd

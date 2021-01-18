@@ -42,16 +42,14 @@ type CreateOpts struct {
 	IO IO
 	// Checkpoint digest to restore container state
 	Checkpoint string
-	// ExternalCheckpoint is true if the Checkpoint is from a outter service
-	ExternalCheckpoint bool
 	// RuntimeOptions for the runtime
 	RuntimeOptions *types.Any
 	// TaskOptions received for the task
 	TaskOptions *types.Any
 	// Runtime to use
 	Runtime string
-	// ExternalNamespaces for the task
-	ExternalNamespaces *types.Any
+	// ExternalResources for the task
+	ExternalResources *types.Any
 }
 
 // Exit information for a process

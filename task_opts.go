@@ -51,8 +51,13 @@ func WithRootFS(mounts []mount.Mount) NewTaskOpts {
 func WithTaskCheckpoint(im Image, useExternalCheckpoint bool) NewTaskOpts {
 	return func(ctx context.Context, c *Client, info *TaskInfo) error {
 		if useExternalCheckpoint {
-			info.Ref = im.Name()
-			info.Checkpoint = &types.Descriptor{}
+			// we store the name and the namespace of the checkpoint in descriptor
+			info.Checkpoint = &types.Descriptor{
+				Annotations: map[string]string{
+					"name":      im.Name(),
+					"namespace": c.defaultns,
+				},
+			}
 			return nil
 		}
 		desc := im.Target()

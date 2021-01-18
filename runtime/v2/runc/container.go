@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"sync"
 
@@ -31,6 +30,7 @@ import (
 	cgroupsv2 "github.com/containerd/cgroups/v2"
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/pkg/process"
@@ -48,7 +48,7 @@ func NewContainer(ctx context.Context, platform stdio.Platform, r *task.CreateTa
 	if err != nil {
 		return nil, errors.Wrap(err, "create namespace")
 	}
-	ne, err := ParseExternalNamespaces(r.ExternalNamespaces)
+	er, err := ParseExternalResources(r.ExternalResources)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse external namspaces")
 	}
@@ -136,15 +136,12 @@ func NewContainer(ctx context.Context, platform stdio.Platform, r *task.CreateTa
 		return nil, errdefs.ToGRPC(err)
 	}
 	container := &Container{
-		ID:              r.ID,
-		Bundle:          r.Bundle,
-		process:         p,
-		processes:       make(map[string]process.Process),
-		reservedProcess: make(map[string]struct{}),
-		ExtNamespaces:   ne,
-	}
-	if r.ExternalCheckpoint {
-		container.ExtCheckpointName = path.Base(r.Checkpoint)
+		ID:                r.ID,
+		Bundle:            r.Bundle,
+		process:           p,
+		processes:         make(map[string]process.Process),
+		reservedProcess:   make(map[string]struct{}),
+		ExternalResources: er,
 	}
 	pid := p.Pid()
 	if pid > 0 {
@@ -250,9 +247,8 @@ type Container struct {
 	ID string
 	// Bundle path
 	Bundle string
-	// ExternalNamespaces
-	ExtNamespaces     namespaces.ExternalNamespaces
-	ExtCheckpointName string
+	// ExternalResources
+	ExternalResources *external.ResourcesInfo
 
 	// cgroup is either cgroups.Cgroup or *cgroupsv2.Manager
 	cgroup          interface{}

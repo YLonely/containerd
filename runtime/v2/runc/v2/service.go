@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 
-	cermns "github.com/YLonely/cer-manager/api/types"
+	cmtypes "github.com/YLonely/cer-manager/api/types"
 	cermclient "github.com/YLonely/cer-manager/client"
 
 	"github.com/containerd/cgroups"
@@ -311,7 +311,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := populateRootfsWithExternal(r.Bundle, r.ExternalNamespaces); err != nil {
+	if err := populateRootfsWithExternal(r.Bundle, r.ExternalResources); err != nil {
 		return nil, err
 	}
 
@@ -724,15 +724,15 @@ func (s *service) checkProcesses(e runcC.Exit) {
 			continue
 		}
 		// return external namespaces
-		if container.ExtNamespaces != nil {
-			client, err := cermclient.NewDefaultClient()
+		if container.ExternalResources != nil {
+			client, err := cermclient.Default()
 			if err != nil {
 				logrus.WithError(err).Warn("failed to create client of external namespaces")
 			} else {
 				defer client.Close()
-				for _, ns := range []cermns.NamespaceType{cermns.NamespaceIPC, cermns.NamespaceMNT, cermns.NamespaceUTS} {
-					if info, exists := container.ExtNamespaces[ns]; exists {
-						if ns == cermns.NamespaceMNT {
+				for _, ns := range []cmtypes.NamespaceType{cmtypes.NamespaceIPC, cmtypes.NamespaceMNT, cmtypes.NamespaceUTS} {
+					if info, exists := container.ExternalResources.Namespaces[ns]; exists {
+						if ns == cmtypes.NamespaceMNT {
 							if err = depopulateRootfsOfExternal(container.Bundle, info.Path); err != nil {
 								logrus.WithError(err).Warnf("failed to depopulate rootfs %s", container.Bundle)
 							}
@@ -742,9 +742,12 @@ func (s *service) checkProcesses(e runcC.Exit) {
 						}
 					}
 				}
-				if container.ExtCheckpointName != "" {
-					if err = client.PutCheckpoint(container.ExtCheckpointName); err != nil {
-						logrus.WithError(err).Warnf("failed to return checkpoint %q", container.ExtCheckpointName)
+				if container.ExternalResources.Checkpoint != nil {
+					if err = client.PutCheckpoint(cmtypes.NewContainerdReference(
+						container.ExternalResources.Checkpoint.Name,
+						container.ExternalResources.Checkpoint.Namespace,
+					)); err != nil {
+						logrus.WithError(err).Warnf("failed to return checkpoint %q", container.ExternalResources.Checkpoint.Name)
 					}
 				}
 			}
@@ -835,19 +838,17 @@ func (s *service) initPlatform() error {
 	return nil
 }
 
-func populateRootfsWithExternal(bundle string, externalNamespaces *ptypes.Any) error {
-	if externalNamespaces == nil {
+func populateRootfsWithExternal(bundle string, externalResources *ptypes.Any) error {
+	if externalResources == nil {
 		return nil
 	}
-	var en namespaces.ExternalNamespaces
-	var err error
-	var info namespaces.ExternalNamespaceInfo
-	var exists bool
-	en, err = runc.ParseExternalNamespaces(externalNamespaces)
+	er, err := runc.ParseExternalResources(externalResources)
 	if err != nil {
 		return err
 	}
-	if info, exists = en[cermns.NamespaceMNT]; !exists {
+	namespaces := er.Namespaces
+	info, exists := namespaces[cmtypes.NamespaceMNT]
+	if !exists {
 		return nil
 	}
 	rootfs := path.Join(bundle, "rootfs")

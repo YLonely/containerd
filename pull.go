@@ -193,7 +193,7 @@ func (c *Client) fetch(ctx context.Context, rCtx *RemoteContext, ref string, lim
 			childrenHandler = images.LimitManifests(childrenHandler, rCtx.PlatformMatcher, limit)
 		}
 
-		childrenHandler = images.FilterCheckpoints(childrenHandler, ref)
+		childrenHandler = images.FilterCheckpoints(childrenHandler, ref, c.defaultns)
 
 		// set isConvertible to true if there is application/octet-stream media type
 		convertibleHandler := images.HandlerFunc(

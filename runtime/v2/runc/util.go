@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 
 	"github.com/containerd/containerd/api/events"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/log"
-	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/runtime"
 	"github.com/containerd/typeurl"
 	"github.com/gogo/protobuf/types"
@@ -88,7 +88,7 @@ func ShouldKillAllOnExit(ctx context.Context, bundlePath string) bool {
 	return true
 }
 
-func ParseExternalNamespaces(any *types.Any) (namespaces.ExternalNamespaces, error) {
+func ParseExternalResources(any *types.Any) (*external.ResourcesInfo, error) {
 	if any == nil {
 		return nil, nil
 	}
@@ -98,9 +98,9 @@ func ParseExternalNamespaces(any *types.Any) (namespaces.ExternalNamespaces, err
 	if err != nil {
 		return nil, err
 	}
-	ret, ok := i.(*namespaces.ExternalNamespaces)
+	ret, ok := i.(*external.ResourcesInfo)
 	if !ok {
-		return nil, errors.New("can't convert any to ExternalNamespaces")
+		return nil, errors.New("can't convert any to ExternalResources")
 	}
-	return *ret, nil
+	return ret, nil
 }

@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	cmtypes "github.com/YLonely/cer-manager/api/types"
 	cermclient "github.com/YLonely/cer-manager/client"
 	api "github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/api/types"
@@ -36,12 +37,12 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/filters"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/mount"
-	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/pkg/timeout"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/runtime"
@@ -151,15 +152,21 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 		return nil, err
 	}
 	externalCheckpoint := false
+	var checkpointName, checkpointNamespace string
 	// jump get checkpointPath from checkpoint image
 	if checkpointPath == "" && r.Checkpoint != nil {
-		if r.Ref != "" {
+		if r.Checkpoint.MediaType == "" {
 			externalCheckpoint = true
-			client, err := cermclient.NewDefaultClient()
+			client, err := cermclient.Default()
 			if err != nil {
 				return nil, err
 			}
-			checkpointPath, err = client.GetCheckpoint(r.Ref)
+			checkpointName = r.Checkpoint.Annotations["name"]
+			checkpointNamespace = r.Checkpoint.Annotations["namespace"]
+			checkpointPath, err = client.GetCheckpoint(cmtypes.NewContainerdReference(
+				checkpointName,
+				checkpointNamespace,
+			))
 			if err != nil {
 				return nil, err
 			}
@@ -187,9 +194,9 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			}
 		}
 	}
-	externalNamespaces, err := parseExternalNamespaces(container)
-	if err != nil {
-		return nil, err
+	erAny := getExternalResourcesAny(container)
+	if externalCheckpoint {
+		erAny, err = setExternalCheckpoint(erAny, checkpointName, checkpointNamespace)
 	}
 	opts := runtime.CreateOpts{
 		Spec: container.Spec,
@@ -199,12 +206,11 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			Stderr:   r.Stderr,
 			Terminal: r.Terminal,
 		},
-		Checkpoint:         checkpointPath,
-		ExternalCheckpoint: externalCheckpoint,
-		Runtime:            container.Runtime.Name,
-		RuntimeOptions:     container.Runtime.Options,
-		TaskOptions:        r.Options,
-		ExternalNamespaces: externalNamespaces,
+		Checkpoint:        checkpointPath,
+		Runtime:           container.Runtime.Name,
+		RuntimeOptions:    container.Runtime.Options,
+		TaskOptions:       r.Options,
+		ExternalResources: erAny,
 	}
 	for _, m := range r.Rootfs {
 		opts.Rootfs = append(opts.Rootfs, mount.Mount{
@@ -831,15 +837,48 @@ func checkRuntime(current, expected string) bool {
 	return true
 }
 
-func parseExternalNamespaces(c *containers.Container) (*ptypes.Any, error) {
+func getExternalResourcesAny(c *containers.Container) *ptypes.Any {
 	if c.Extensions == nil {
-		return nil, nil
+		return nil
 	}
 	var any ptypes.Any
 	var exists bool
-	any, exists = c.Extensions[namespaces.ExternalNamespacesExtensionKey]
+	any, exists = c.Extensions[external.ResourcesExtensionKey]
 	if !exists {
+		return nil
+	}
+	return &any
+}
+
+func parseExternalResources(any *ptypes.Any) (*external.ResourcesInfo, error) {
+	if any == nil {
 		return nil, nil
 	}
-	return &any, nil
+	var i interface{}
+	var err error
+	i, err = typeurl.UnmarshalAny(any)
+	if err != nil {
+		return nil, err
+	}
+	ret, ok := i.(*external.ResourcesInfo)
+	if !ok {
+		return nil, errors.New("can't convert any to ExternalResources")
+	}
+	return ret, nil
+}
+
+func setExternalCheckpoint(any *ptypes.Any, name, namespace string) (*ptypes.Any, error) {
+	info, err := parseExternalResources(any)
+	if err != nil {
+		return nil, err
+	}
+	info.Checkpoint = &external.CheckpointInfo{
+		Name:      name,
+		Namespace: namespace,
+	}
+	newAny, err := typeurl.MarshalAny(info)
+	if err != nil {
+		return nil, err
+	}
+	return newAny, nil
 }
