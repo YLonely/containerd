@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"sort"
 
-	cmtypes "github.com/YLonely/cer-manager/api/types"
 	cermclient "github.com/YLonely/cer-manager/client"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -264,10 +264,8 @@ func FilterCheckpoints(f HandlerFunc, name, namespace string) HandlerFunc {
 			// ignore errors here
 			return children, nil
 		}
-		_, err = cli.GetCheckpoint(cmtypes.NewContainerdReference(
-			name,
-			namespace,
-		))
+		defer cli.Close()
+		_, err = external.GetCheckpoint(cli, namespace, name)
 		if err != nil {
 			return children, nil
 		}

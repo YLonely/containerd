@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	cmtypes "github.com/YLonely/cer-manager/api/types"
 	cermclient "github.com/YLonely/cer-manager/client"
 	api "github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/api/types"
@@ -161,12 +160,10 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 			if err != nil {
 				return nil, err
 			}
+			defer client.Close()
 			checkpointName = r.Checkpoint.Annotations["name"]
 			checkpointNamespace = r.Checkpoint.Annotations["namespace"]
-			checkpointPath, err = client.GetCheckpoint(cmtypes.NewContainerdReference(
-				checkpointName,
-				checkpointNamespace,
-			))
+			checkpointPath, err = external.GetCheckpoint(client, checkpointNamespace, checkpointName)
 			if err != nil {
 				return nil, err
 			}
@@ -196,6 +193,9 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 	}
 	erAny := getExternalResourcesAny(container)
 	if externalCheckpoint {
+		if erAny == nil {
+			return nil, errors.New("container has emptry external resources")
+		}
 		erAny, err = setExternalCheckpoint(erAny, checkpointName, checkpointNamespace)
 	}
 	opts := runtime.CreateOpts{

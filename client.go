@@ -211,6 +211,10 @@ type Client struct {
 	connector func() (*grpc.ClientConn, error)
 }
 
+func (c *Client) Namespace() string {
+	return c.defaultns
+}
+
 // Reconnect re-establishes the GRPC connection to the containerd daemon
 func (c *Client) Reconnect() error {
 	if c.connector == nil {
@@ -485,7 +489,7 @@ func (c *Client) ListImages(ctx context.Context, filters ...string) ([]Image, er
 }
 
 // Restore restores a container from a checkpoint
-func (c *Client) Restore(ctx context.Context, id string, checkpoint Image, opts ...RestoreOpts) (Container, error) {
+func (c *Client) Restore(ctx context.Context, id string, checkpoint Image, opts []RestoreOpts, containerOpts ...NewContainerOpts) (Container, error) {
 	store := c.ContentStore()
 	index, err := decodeIndex(ctx, store, checkpoint.Target())
 	if err != nil {
@@ -502,6 +506,7 @@ func (c *Client) Restore(ctx context.Context, id string, checkpoint Image, opts 
 	for _, o := range opts {
 		copts = append(copts, o(ctx, id, c, checkpoint, index))
 	}
+	copts = append(copts, containerOpts...)
 
 	ctr, err := c.NewContainer(ctx, id, copts...)
 	if err != nil {

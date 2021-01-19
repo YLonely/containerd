@@ -134,7 +134,7 @@ func TestCheckpointRestorePTY(t *testing.T) {
 		WithRestoreSpec,
 		WithRestoreRuntime,
 		WithRestoreRW,
-	}...); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if task, err = container.NewTask(ctx, direct.IOCreate,
@@ -232,7 +232,7 @@ func TestCheckpointRestore(t *testing.T) {
 		WithRestoreSpec,
 		WithRestoreRuntime,
 		WithRestoreRW,
-	}...); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if task, err = container.NewTask(ctx, empty(), WithTaskCheckpoint(checkpoint, false)); err != nil {
@@ -319,7 +319,7 @@ func TestCheckpointRestoreNewContainer(t *testing.T) {
 		WithRestoreSpec,
 		WithRestoreRuntime,
 		WithRestoreRW,
-	}...); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if task, err = container.NewTask(ctx, empty(), WithTaskCheckpoint(checkpoint, false)); err != nil {

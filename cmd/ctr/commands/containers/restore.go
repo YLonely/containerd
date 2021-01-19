@@ -17,10 +17,14 @@
 package containers
 
 import (
+	cmclient "github.com/YLonely/cer-manager/client"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/external"
+	"github.com/containerd/containerd/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -76,23 +80,49 @@ var restoreCommand = cli.Command{
 		}
 
 		opts := []containerd.RestoreOpts{
-			containerd.WithRestoreSpec,
 			containerd.WithRestoreRuntime,
 		}
+		copts := []containerd.NewContainerOpts{}
+		specOpts := []oci.SpecOpts{}
 		externalMountNamespace := false
-		for _, ns := range context.StringSlice("external-ns") {
-			switch ns {
-			case "mnt":
-				externalMountNamespace = true
-				opts = append(opts, containerd.WithExternalMNT)
-			case "ipc":
-				opts = append(opts, containerd.WithExternalIPC)
-			case "uts":
-				opts = append(opts, containerd.WithExternalUTS)
-			default:
-				return errors.New("invalid namespace type")
-			}
+		externalResources := external.ResourcesInfo{
+			Namespaces: map[specs.LinuxNamespaceType]external.NamespaceInfo{},
 		}
+		if len(context.StringSlice("external-ns")) == 0 {
+			opts = append(opts, containerd.WithRestoreSpec)
+		} else {
+			cli, err := cmclient.Default()
+			if err != nil {
+				return err
+			}
+			defer cli.Close()
+			spec, err := containerd.ParseSpecFromCheckpoint(ctx, client.ContentStore(), checkpoint)
+			if err != nil {
+				return err
+			}
+			for _, ns := range context.StringSlice("external-ns") {
+				switch ns {
+				case "mnt":
+					externalMountNamespace = true
+					if err = handleExternalNamespace(cli, specs.MountNamespace, client, checkpoint, &specOpts, &externalResources); err != nil {
+						return err
+					}
+				case "ipc":
+					if err = handleExternalNamespace(cli, specs.IPCNamespace, client, checkpoint, &specOpts, &externalResources); err != nil {
+						return err
+					}
+				case "uts":
+					if err = handleExternalNamespace(cli, specs.UTSNamespace, client, checkpoint, &specOpts, &externalResources); err != nil {
+						return err
+					}
+				default:
+					return errors.New("invalid namespace type")
+				}
+			}
+			copts = append(copts, containerd.WithSpec(spec, specOpts...))
+		}
+		copts = append(copts, containerd.WithContainerExtension(external.ResourcesExtensionKey, &externalResources))
+
 		if !externalMountNamespace {
 			opts = append(opts, containerd.WithRestoreImage)
 		}
@@ -100,7 +130,7 @@ var restoreCommand = cli.Command{
 			opts = append(opts, containerd.WithRestoreRW)
 		}
 
-		ctr, err := client.Restore(ctx, id, checkpoint, opts...)
+		ctr, err := client.Restore(ctx, id, checkpoint, opts, copts...)
 		if err != nil {
 			return err
 		}
@@ -117,4 +147,23 @@ var restoreCommand = cli.Command{
 
 		return task.Start(ctx)
 	},
+}
+
+func handleExternalNamespace(cli *cmclient.Client, t specs.LinuxNamespaceType, client *containerd.Client, checkpoint containerd.Image, specOpts *[]oci.SpecOpts, externalResources *external.ResourcesInfo) error {
+	id, path, info, err := external.GetNamespace(cli, t, client.Namespace(), checkpoint.Name())
+	if err != nil {
+		return errors.Wrap(err, "failed to get external mount namespace")
+	}
+	*specOpts = append(*specOpts, oci.WithLinuxNamespace(
+		specs.LinuxNamespace{
+			Type: t,
+			Path: path,
+		},
+	))
+	externalResources.Namespaces[t] = external.NamespaceInfo{
+		ID:   id,
+		Info: info,
+		Path: path,
+	}
+	return nil
 }

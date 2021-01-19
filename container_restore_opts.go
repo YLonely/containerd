@@ -20,19 +20,14 @@ import (
 	"context"
 	"encoding/json"
 
-	cmtypes "github.com/YLonely/cer-manager/api/types"
-	cermclient "github.com/YLonely/cer-manager/client"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/oci"
-	"github.com/containerd/typeurl"
 	"github.com/gogo/protobuf/proto"
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/image-spec/identity"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 )
 
@@ -155,121 +150,26 @@ func WithRestoreRW(ctx context.Context, id string, client *Client, checkpoint Im
 	}
 }
 
-func getExternalNamespace(t cmtypes.NamespaceType, ref cmtypes.Reference) (id int, path string, info interface{}, err error) {
-	var client *cermclient.Client
-	client, err = cermclient.Default()
+func ParseSpecFromCheckpoint(ctx context.Context, store content.Store, checkpoint Image) (*oci.Spec, error) {
+	index, err := decodeIndex(ctx, store, checkpoint.Target())
 	if err != nil {
-		return
+		return nil, err
 	}
-	defer client.Close()
-	id, path, info, err = client.GetNamespace(t, ref)
-	return
-}
-
-func setExternalNamespace(ctx context.Context, client *Client, c *containers.Container, t specs.LinuxNamespaceType, path string) error {
+	m, err := GetIndexByMediaType(index, images.MediaTypeContainerd1CheckpointConfig)
+	if err != nil {
+		return nil, err
+	}
+	data, err := content.ReadBlob(ctx, store, *m)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read checkpoint config from content store")
+	}
+	var any ptypes.Any
+	if err = proto.Unmarshal(data, &any); err != nil {
+		return nil, err
+	}
 	var spec oci.Spec
-	var err error
-	if err = json.Unmarshal(c.Spec.Value, &spec); err != nil {
-		return err
+	if err = json.Unmarshal(any.Value, &spec); err != nil {
+		return nil, err
 	}
-	ns := specs.LinuxNamespace{
-		Type: t,
-		Path: path,
-	}
-	if err := oci.WithLinuxNamespace(ns)(ctx, client, c, &spec); err != nil {
-		return err
-	}
-	c.Spec.Value, err = json.Marshal(spec)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func setNamespaceExtension(ctx context.Context, client *Client, c *containers.Container, t cmtypes.NamespaceType, id int, path string, info interface{}) error {
-	namespaceInfo := external.NamespaceInfo{
-		ID:   id,
-		Path: path,
-		Info: info,
-	}
-	var resourcesInfo *external.ResourcesInfo
-	ok := false
-	if c.Extensions != nil {
-		if any, exists := c.Extensions[external.ResourcesExtensionKey]; exists {
-			data, err := typeurl.UnmarshalAny(&any)
-			if err != nil {
-				return err
-			}
-			resourcesInfo = data.(*external.ResourcesInfo)
-			ok = true
-		}
-	}
-	if !ok {
-		resourcesInfo = &external.ResourcesInfo{
-			Namespaces: map[cmtypes.NamespaceType]external.NamespaceInfo{},
-		}
-	}
-	resourcesInfo.Namespaces[t] = namespaceInfo
-	if err := WithContainerExtension(external.ResourcesExtensionKey, resourcesInfo)(ctx, client, c); err != nil {
-		return err
-	}
-	return nil
-}
-
-func WithExternalUTS(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
-	return func(ctx context.Context, client *Client, c *containers.Container) error {
-		if c.Spec == nil {
-			return errors.New("empty container spec")
-		}
-		id, path, _, err := getExternalNamespace(cmtypes.NamespaceUTS, cmtypes.NewContainerdReference(checkpoint.Name(), client.defaultns))
-		if err != nil {
-			return err
-		}
-		if err := setExternalNamespace(ctx, client, c, specs.UTSNamespace, path); err != nil {
-			return err
-		}
-		if err := setNamespaceExtension(ctx, client, c, cmtypes.NamespaceUTS, id, path, nil); err != nil {
-			return err
-		}
-		return nil
-	}
-}
-
-func WithExternalIPC(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
-	return func(ctx context.Context, client *Client, c *containers.Container) error {
-		if c.Spec == nil {
-			return errors.New("empty container spec")
-		}
-		id, path, _, err := getExternalNamespace(cmtypes.NamespaceIPC, cmtypes.NewContainerdReference(checkpoint.Name(), client.defaultns))
-		if err != nil {
-			return err
-		}
-		if err := setExternalNamespace(ctx, client, c, specs.IPCNamespace, path); err != nil {
-			return err
-		}
-		if err := setNamespaceExtension(ctx, client, c, cmtypes.NamespaceIPC, id, path, nil); err != nil {
-			return err
-		}
-		return nil
-	}
-}
-
-func WithExternalMNT(ctx context.Context, id string, client *Client, checkpoint Image, index *imagespec.Index) NewContainerOpts {
-	return func(ctx context.Context, client *Client, c *containers.Container) error {
-		if c.Spec == nil {
-			return errors.New("empty container spec")
-		}
-		id, path, info, err := getExternalNamespace(cmtypes.NamespaceMNT, cmtypes.NewContainerdReference(checkpoint.Name(), client.defaultns))
-		if err != nil {
-			return err
-		}
-		if err := setExternalNamespace(ctx, client, c, specs.MountNamespace, path); err != nil {
-			return err
-		}
-		if err := setNamespaceExtension(ctx, client, c, cmtypes.NamespaceMNT, id, path, info); err != nil {
-			return err
-		}
-		c.Image = checkpoint.Name()
-		return nil
-	}
+	return &spec, nil
 }
