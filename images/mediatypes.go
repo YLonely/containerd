@@ -128,6 +128,16 @@ func IsKnownConfig(mt string) bool {
 	return false
 }
 
+func IsCheckpointConfig(mt string) bool {
+	switch mt {
+	case MediaTypeContainerd1CheckpointOptions, ocispec.MediaTypeImageLayerGzip,
+		MediaTypeContainerd1Checkpoint, MediaTypeContainerd1CheckpointStargz,
+		MediaTypeContainerd1CheckpointConfig, MediaTypeContainerd1CheckpointRuntimeOptions:
+		return true
+	}
+	return false
+}
+
 // ChildGCLabels returns the label for a given descriptor to reference it
 func ChildGCLabels(desc ocispec.Descriptor) []string {
 	mt := desc.MediaType

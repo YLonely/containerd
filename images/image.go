@@ -205,6 +205,9 @@ func Manifest(ctx context.Context, provider content.Provider, image ocispec.Desc
 
 			var descs []ocispec.Descriptor
 			for _, d := range idx.Manifests {
+				if IsCheckpointConfig(d.MediaType) {
+					continue
+				}
 				if d.Platform == nil || platform.Match(*d.Platform) {
 					descs = append(descs, d)
 				}
