@@ -25,6 +25,7 @@ import (
 	"github.com/containerd/containerd"
 	containerdio "github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/log"
 	cni "github.com/containerd/go-cni"
 	"github.com/containerd/nri"
@@ -45,6 +46,7 @@ import (
 	ctrdutil "github.com/containerd/containerd/pkg/cri/util"
 	"github.com/containerd/containerd/pkg/netns"
 	"github.com/containerd/containerd/snapshots"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
 )
 
@@ -152,11 +154,14 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		}
 	}
 
+	externalResources := &external.ResourcesInfo{
+		Namespaces: map[specs.LinuxNamespaceType]external.NamespaceInfo{},
+	}
 	// Create sandbox container.
 	// NOTE: sandboxContainerSpec SHOULD NOT have side
 	// effect, e.g. accessing/creating files, so that we can test
 	// it safely.
-	spec, err := c.sandboxContainerSpec(id, config, &image.ImageSpec.Config, sandbox.NetNSPath, ociRuntime.PodAnnotations)
+	spec, err := c.sandboxContainerSpec(id, config, &image.ImageSpec.Config, sandbox.NetNSPath, ociRuntime.PodAnnotations, externalResources)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate sandbox container spec")
 	}
@@ -199,6 +204,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		containerd.WithSpec(spec, specOpts...),
 		containerd.WithContainerLabels(sandboxLabels),
 		containerd.WithContainerExtension(sandboxMetadataExtension, &sandbox.Metadata),
+		containerd.WithContainerExtension(external.ResourcesExtensionKey, externalResources),
 		containerd.WithRuntime(ociRuntime.Type, runtimeOpts)}
 
 	container, err := c.client.NewContainer(ctx, id, opts...)

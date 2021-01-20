@@ -242,8 +242,31 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 		containerd.WithContainerLabels(containerLabels),
 		containerd.WithContainerExtension(containerMetadataExtension, &meta))
 	var cntr containerd.Container
-	if cntr, err = c.client.NewContainer(ctx, id, opts...); err != nil {
-		return nil, errors.Wrap(err, "failed to create containerd container")
+
+	checkpointImgs := parseCheckpointImages(sandboxConfig.Labels)
+	restoreContainer := false
+	if len(checkpointImgs) > 0 {
+		for _, imgName := range checkpointImgs {
+			if imgName == containerdImage.Name() {
+				ropts, copts, err := c.containerRestoreOpts(ctx, config, sandboxPid, containerdImage)
+				if err != nil {
+					return nil, err
+				}
+				copts = append(copts,
+					containerd.WithContainerLabels(containerLabels),
+					containerd.WithContainerExtension(containerMetadataExtension, &meta))
+				if cntr, err = c.client.Restore(ctx, id, containerdImage, ropts, copts...); err != nil {
+					return nil, errors.Wrap(err, "failed to restore containerd container")
+				}
+				restoreContainer = true
+				break
+			}
+		}
+	}
+	if !restoreContainer {
+		if cntr, err = c.client.NewContainer(ctx, id, opts...); err != nil {
+			return nil, errors.Wrap(err, "failed to create containerd container")
+		}
 	}
 	defer func() {
 		if retErr != nil {

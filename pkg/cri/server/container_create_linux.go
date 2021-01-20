@@ -23,19 +23,25 @@ import (
 	"strconv"
 	"strings"
 
+	cmclient "github.com/YLonely/cer-manager/client"
 	"github.com/containerd/cgroups"
+	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/contrib/apparmor"
 	"github.com/containerd/containerd/contrib/seccomp"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/oci"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	runtimespec "github.com/opencontainers/runtime-spec/specs-go"
 	selinux "github.com/opencontainers/selinux/go-selinux"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 
 	"github.com/containerd/containerd/pkg/cri/annotations"
 	"github.com/containerd/containerd/pkg/cri/config"
+	"github.com/containerd/containerd/pkg/cri/constants"
 	customopts "github.com/containerd/containerd/pkg/cri/opts"
 )
 
@@ -357,6 +363,53 @@ func (c *criService) generateSeccompSpecOpts(seccompProf string, privileged, sec
 		}
 		return seccomp.WithProfile(strings.TrimPrefix(seccompProf, profileNamePrefix)), nil
 	}
+}
+
+func (c *criService) containerRestoreOpts(ctx context.Context, config *runtime.ContainerConfig, pid uint32, checkpoint containerd.Image) (ropts []containerd.RestoreOpts, copts []containerd.NewContainerOpts, err error) {
+	var (
+		spec              *oci.Spec
+		externalResources = &external.ResourcesInfo{
+			Namespaces: map[runtimespec.LinuxNamespaceType]external.NamespaceInfo{},
+		}
+		securityContext = config.GetLinux().GetSecurityContext()
+		cli             *cmclient.Client
+		id              int
+		path            string
+		info            interface{}
+	)
+	ropts = append(ropts, containerd.WithRestoreRuntime)
+	spec, err = containerd.ParseSpecFromCheckpoint(ctx, c.client.ContentStore(), checkpoint)
+	if err != nil {
+		err = errors.Wrap(err, "failed to parse spec from checkpoint image")
+		return
+	}
+	cli, err = cmclient.Default()
+	if err != nil {
+		err = errors.Wrap(err, "failed to create cer-manager client")
+		return
+	}
+	defer cli.Close()
+	id, path, info, err = external.GetNamespace(cli, specs.MountNamespace, constants.K8sContainerdNamespace, checkpoint.Name())
+	if err != nil {
+		return
+	}
+	externalResources.Namespaces[specs.MountNamespace] = external.NamespaceInfo{
+		ID:   id,
+		Info: info,
+		Path: path,
+	}
+	specOpts := []oci.SpecOpts{
+		oci.WithLinuxNamespace(runtimespec.LinuxNamespace{
+			Type: specs.MountNamespace,
+			Path: path,
+		}),
+		customopts.WithPodNamespaces(securityContext, pid),
+	}
+	copts = append(copts,
+		containerd.WithSpec(spec, specOpts...),
+		containerd.WithContainerExtension(external.ResourcesExtensionKey, externalResources),
+	)
+	return
 }
 
 // generateApparmorSpecOpts generates containerd SpecOpts for apparmor.

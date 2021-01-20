@@ -157,7 +157,7 @@ func TestLinuxSandboxContainerSpec(t *testing.T) {
 		if test.configChange != nil {
 			test.configChange(config)
 		}
-		spec, err := c.sandboxContainerSpec(testID, config, imageConfig, nsPath, nil)
+		spec, err := c.sandboxContainerSpec(testID, config, imageConfig, nsPath, nil, nil)
 		if test.expectErr {
 			assert.Error(t, err)
 			assert.Nil(t, spec)
@@ -416,7 +416,7 @@ func TestSandboxDisableCgroup(t *testing.T) {
 	config, imageConfig, _ := getRunPodSandboxTestData()
 	c := newTestCRIService()
 	c.config.DisableCgroup = true
-	spec, err := c.sandboxContainerSpec("test-id", config, imageConfig, "test-cni", []string{})
+	spec, err := c.sandboxContainerSpec("test-id", config, imageConfig, "test-cni", []string{}, nil)
 	require.NoError(t, err)
 
 	t.Log("resource limit should not be set")

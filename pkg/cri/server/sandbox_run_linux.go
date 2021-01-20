@@ -21,7 +21,9 @@ import (
 	"os"
 	"strings"
 
+	cmclient "github.com/YLonely/cer-manager/client"
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/plugin"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -32,12 +34,13 @@ import (
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 
 	"github.com/containerd/containerd/pkg/cri/annotations"
+	"github.com/containerd/containerd/pkg/cri/constants"
 	customopts "github.com/containerd/containerd/pkg/cri/opts"
 	osinterface "github.com/containerd/containerd/pkg/os"
 )
 
 func (c *criService) sandboxContainerSpec(id string, config *runtime.PodSandboxConfig,
-	imageConfig *imagespec.ImageConfig, nsPath string, runtimePodAnnotations []string) (_ *runtimespec.Spec, retErr error) {
+	imageConfig *imagespec.ImageConfig, nsPath string, runtimePodAnnotations []string, externalResources *external.ResourcesInfo) (_ *runtimespec.Spec, retErr error) {
 	// Creates a spec Generator with the default spec.
 	// TODO(random-liu): [P1] Compare the default settings with docker and containerd default.
 	specOpts := []oci.SpecOpts{
@@ -92,6 +95,29 @@ func (c *criService) sandboxContainerSpec(id string, config *runtime.PodSandboxC
 	}
 	if nsOptions.GetIpc() == runtime.NamespaceMode_NODE {
 		specOpts = append(specOpts, customopts.WithoutNamespace(runtimespec.IPCNamespace))
+	} else {
+		checkpointImgs := parseCheckpointImages(config.Labels)
+		if len(checkpointImgs) > 0 && externalResources != nil {
+			cli, err := cmclient.Default()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to create cer-manager client")
+			}
+			defer cli.Close()
+			id, path, _, err := external.GetNamespace(cli, runtimespec.IPCNamespace, constants.K8sContainerdNamespace, checkpointImgs...)
+			if err != nil {
+				return nil, err
+			}
+			specOpts = append(specOpts, oci.WithLinuxNamespace(
+				runtimespec.LinuxNamespace{
+					Type: runtimespec.IPCNamespace,
+					Path: path,
+				},
+			))
+			externalResources.Namespaces[runtimespec.IPCNamespace] = external.NamespaceInfo{
+				ID:   id,
+				Path: path,
+			}
+		}
 	}
 
 	// It's fine to generate the spec before the sandbox /dev/shm
@@ -311,4 +337,14 @@ func (c *criService) taskOpts(runtimeType string) []containerd.NewTaskOpts {
 	}
 
 	return taskOpts
+}
+
+func parseCheckpointImages(labels map[string]string) []string {
+	images := []string{}
+	for k, v := range labels {
+		if strings.HasPrefix(k, constants.LabelCheckpointPrefix) {
+			images = append(images, strings.ReplaceAll(strings.TrimPrefix(k, constants.LabelCheckpointPrefix), "_", "/")+":"+v)
+		}
+	}
+	return images
 }

@@ -98,8 +98,31 @@ func (c *criService) StartContainer(ctx context.Context, r *runtime.StartContain
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get container info")
 	}
-
-	taskOpts := c.taskOpts(ctrInfo.Runtime.Name)
+	taskOpts := []containerd.NewTaskOpts{}
+	checkpointImgs := parseCheckpointImages(sandbox.Config.Labels)
+	restoreTask := false
+	if len(checkpointImgs) > 0 {
+		image, err := c.localResolve(config.GetImage().GetImage())
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to resolve image %q", config.GetImage().GetImage())
+		}
+		containerdImage, err := c.toContainerdImage(ctx, image)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get image from containerd %q", image.ID)
+		}
+		for _, name := range checkpointImgs {
+			if name == containerdImage.Name() {
+				taskOpts = append(taskOpts,
+					containerd.WithTaskCheckpoint(containerdImage, true),
+				)
+				restoreTask = true
+				break
+			}
+		}
+	}
+	if !restoreTask {
+		taskOpts = c.taskOpts(ctrInfo.Runtime.Name)
+	}
 	task, err := container.NewTask(ctx, ioCreation, taskOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create containerd task")

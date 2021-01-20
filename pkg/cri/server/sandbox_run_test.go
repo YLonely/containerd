@@ -97,7 +97,7 @@ func TestSandboxContainerSpec(t *testing.T) {
 			test.imageConfigChange(imageConfig)
 		}
 		spec, err := c.sandboxContainerSpec(testID, config, imageConfig, nsPath,
-			test.podAnnotations)
+			test.podAnnotations, nil)
 		if test.expectErr {
 			assert.Error(t, err)
 			assert.Nil(t, spec)
