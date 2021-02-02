@@ -233,6 +233,7 @@ func (s *createdCheckpointState) Start(ctx context.Context) error {
 func (s *createdCheckpointState) recordReadyTimestamp(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	timeup := time.NewTimer(5 * time.Second)
+	failed := false
 	restoreFilePath := path.Join(s.p.WorkDir, "restore.log")
 	file, err := os.OpenFile(path.Join(s.p.Bundle, "startup"), os.O_RDWR|os.O_APPEND, 0)
 	if err != nil {
@@ -282,6 +283,9 @@ func (s *createdCheckpointState) recordReadyTimestamp(ctx context.Context) {
 		select {
 		case <-ticker.C:
 		case <-timeup.C:
+			failed = true
+		}
+		if failed {
 			break
 		}
 	}
