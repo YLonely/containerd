@@ -20,6 +20,13 @@ package process
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"time"
 
 	runc "github.com/containerd/go-runc"
 	google_protobuf "github.com/gogo/protobuf/types"
@@ -78,7 +85,39 @@ func (s *createdState) Start(ctx context.Context) error {
 	if err := s.p.start(ctx); err != nil {
 		return err
 	}
+	go s.recordReadyTimestamp(ctx)
 	return s.transition("running")
+}
+
+func (s *createdState) recordReadyTimestamp(ctx context.Context) {
+	var elapsed time.Duration
+	waitDuration := 10 * time.Millisecond
+	file, err := os.OpenFile(path.Join(s.p.Bundle, "startup"), os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		logrus.WithError(err).Error("failed to open startup time")
+		return
+	}
+	defer file.Close()
+	for {
+		if ready, err := portReady(s.p.pid, 8080); err != nil {
+			logrus.WithError(err).Warn()
+		} else if ready {
+			file.WriteString(fmt.Sprintf("%d\n", time.Now().UnixNano()/1000000))
+			return
+		}
+		time.Sleep(waitDuration)
+		elapsed += waitDuration
+		if elapsed > 1000*time.Millisecond {
+			waitDuration = 100 * time.Millisecond
+		} else if elapsed > 100*time.Millisecond {
+			waitDuration = 50 * time.Millisecond
+		}
+		if elapsed > 30*time.Second {
+			break
+		}
+	}
+	file.WriteString("0\n")
+	logrus.Error("failed to record ready timestamp for the container")
 }
 
 func (s *createdState) Delete(ctx context.Context) error {
@@ -162,6 +201,7 @@ func (s *createdCheckpointState) Start(ctx context.Context) error {
 	if _, err := s.p.runtime.Restore(ctx, p.id, p.Bundle, s.opts); err != nil {
 		return p.runtimeError(err, "OCI runtime restore failed")
 	}
+	go s.recordReadyTimestamp(ctx)
 	if sio.Stdin != "" {
 		if err := p.openStdin(sio.Stdin); err != nil {
 			return errors.Wrapf(err, "failed to open stdin fifo %s", sio.Stdin)
@@ -188,6 +228,65 @@ func (s *createdCheckpointState) Start(ctx context.Context) error {
 	}
 	p.pid = pid
 	return s.transition("running")
+}
+
+func (s *createdCheckpointState) recordReadyTimestamp(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Second)
+	timeup := time.NewTimer(5 * time.Second)
+	restoreFilePath := path.Join(s.p.WorkDir, "restore.log")
+	file, err := os.OpenFile(path.Join(s.p.Bundle, "startup"), os.O_RDWR|os.O_APPEND, 0)
+	if err != nil {
+		logrus.WithError(err).Warn("failed to open the `startup` file")
+		return
+	}
+	defer file.Close()
+	for {
+		bs, err := ioutil.ReadFile(restoreFilePath)
+		if err != nil {
+			logrus.WithError(err).Warn("failed to read restore.log")
+		}
+		lines := strings.Split(string(bs), "\n")
+		n := len(lines)
+		if n > 0 {
+			last := lines[n-2]
+			if strings.Contains(last, "Restore finished successfully") {
+				parts := strings.Split(last, " ")
+				timestamp := strings.Trim(parts[0], "()")
+				parts = strings.Split(timestamp, ".")
+				sec, err := strconv.Atoi(parts[0])
+				if err != nil {
+					logrus.WithError(err).Warn("failed to parse timestamp")
+				} else {
+					micro, err := strconv.Atoi(parts[1])
+					if err != nil {
+						logrus.WithError(err).Warn("failed to parse timestamp")
+					} else {
+						bs, err := ioutil.ReadAll(file)
+						if err != nil {
+							logrus.WithError(err).Warn("failed to read the `startup` file")
+							break
+						}
+						startStr := strings.Trim(string(bs), " \t\n")
+						start, err := strconv.Atoi(startStr)
+						if err != nil {
+							logrus.WithError(err).Warn("failed to parse start timestamp")
+							break
+						}
+						d := time.Duration(sec)*time.Second + time.Duration(micro)*time.Microsecond
+						file.WriteString(fmt.Sprintf("%d\n", start+int(d.Milliseconds())))
+						return
+					}
+				}
+			}
+		}
+		select {
+		case <-ticker.C:
+		case <-timeup.C:
+			break
+		}
+	}
+	file.WriteString("0\n")
+	logrus.Error("failed to record the ready timestamp")
 }
 
 func (s *createdCheckpointState) Delete(ctx context.Context) error {

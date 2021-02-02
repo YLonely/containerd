@@ -23,8 +23,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -199,4 +201,47 @@ func stateName(v interface{}) string {
 		return "stopped"
 	}
 	panic(errors.Errorf("invalid state %v", v))
+}
+
+func portReady(pid int, port int) (bool, error) {
+	tcp4 := fmt.Sprintf("/proc/%d/net/tcp", pid)
+	tcp6 := fmt.Sprintf("/proc/%d/net/tcp6", pid)
+	matched, err := matchPort(tcp4, port)
+	if err == nil && matched {
+		return true, nil
+	}
+	return matchPort(tcp6, port)
+}
+
+func matchPort(filePath string, port int) (bool, error) {
+	bs, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return false, err
+	}
+	lines := strings.Split(string(bs), "\n")
+	if len(lines) < 1 {
+		return false, errors.New("invalid file content")
+	}
+	for _, line := range lines[1:] {
+		line = strings.Trim(line, " \n\t")
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, " ")
+		if len(parts) < 2 {
+			return false, errors.Errorf("invalid line content %q", line)
+		}
+		localAddr := strings.Split(parts[1], ":")
+		if len(localAddr) < 2 {
+			return false, errors.Errorf("invalid local addr %q", line, parts[1])
+		}
+		p, err := strconv.ParseInt(localAddr[1], 16, 64)
+		if err != nil {
+			return false, err
+		}
+		if int(p) == port {
+			return true, nil
+		}
+	}
+	return false, nil
 }

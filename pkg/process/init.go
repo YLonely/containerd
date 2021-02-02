@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -128,6 +129,16 @@ func (p *Init) Create(ctx context.Context, r *CreateConfig) error {
 		}
 		p.io = pio
 	}
+	// record start timestamp before we create the container
+	file, err := os.Create(path.Join(p.Bundle, "startup"))
+	if err != nil {
+		return errors.Wrap(err, "failed to create startup file")
+	}
+	defer file.Close()
+	start := time.Now().UnixNano() / 1000000
+	file.WriteString(fmt.Sprintf("%d\n", start))
+	log.G(ctx).Infof("record container start timestamp %d", start)
+
 	if r.Checkpoint != "" {
 		return p.createCheckpointedState(r, pidFile)
 	}
