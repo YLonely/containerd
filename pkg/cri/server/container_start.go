@@ -106,14 +106,18 @@ func (c *criService) StartContainer(ctx context.Context, r *runtime.StartContain
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to resolve image %q", config.GetImage().GetImage())
 		}
-		containerdImage, err := c.toContainerdImage(ctx, image)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get image from containerd %q", image.ID)
+		refs := map[string]struct{}{}
+		for _, ref := range image.References {
+			refs[ref] = struct{}{}
 		}
 		for _, name := range checkpointImgs {
-			if name == containerdImage.Name() {
+			if _, exists := refs[name]; exists {
+				checkpoint, err := c.client.GetImage(ctx, name)
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to get checkpoint %q from containerd", name)
+				}
 				taskOpts = append(taskOpts,
-					containerd.WithTaskCheckpoint(containerdImage, true),
+					containerd.WithTaskCheckpoint(checkpoint, true),
 				)
 				restoreTask = true
 				break
