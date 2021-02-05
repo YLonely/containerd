@@ -246,16 +246,24 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 	checkpointImgs := parseCheckpointImages(sandboxConfig.Labels)
 	restoreContainer := false
 	if len(checkpointImgs) > 0 {
+		refs := map[string]struct{}{}
+		for _, ref := range image.References {
+			refs[ref] = struct{}{}
+		}
 		for _, imgName := range checkpointImgs {
-			if imgName == containerdImage.Name() {
-				ropts, copts, err := c.containerRestoreOpts(ctx, config, sandboxPid, containerdImage)
+			if _, exists := refs[imgName]; exists {
+				checkpoint, err := c.client.GetImage(ctx, imgName)
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to get checkpoint %q from containerd", imgName)
+				}
+				ropts, copts, err := c.containerRestoreOpts(ctx, config, sandboxPid, checkpoint)
 				if err != nil {
 					return nil, err
 				}
 				copts = append(copts,
 					containerd.WithContainerLabels(containerLabels),
 					containerd.WithContainerExtension(containerMetadataExtension, &meta))
-				if cntr, err = c.client.Restore(ctx, id, containerdImage, ropts, copts...); err != nil {
+				if cntr, err = c.client.Restore(ctx, id, checkpoint, ropts, copts...); err != nil {
 					return nil, errors.Wrap(err, "failed to restore containerd container")
 				}
 				restoreContainer = true
