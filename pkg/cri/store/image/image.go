@@ -24,6 +24,7 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/images"
 	imagedigest "github.com/opencontainers/go-digest"
 	"github.com/opencontainers/go-digest/digestset"
 	imageidentity "github.com/opencontainers/image-spec/identity"
@@ -128,18 +129,39 @@ func getImage(ctx context.Context, i containerd.Image) (*Image, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "get image compressed resource size")
 	}
-
-	desc, err := i.Config(ctx)
+	var id string
+	var config imagespec.Descriptor
+	var ociimage imagespec.Image
+	isCheckpoint := false
+	if i.Target().MediaType == imagespec.MediaTypeImageIndex {
+		// i maybe a checkpoint
+		p, err := content.ReadBlob(ctx, i.ContentStore(), i.Target())
+		if err != nil {
+			return nil, errors.Wrap(err, "get image target from containerd")
+		}
+		var idx imagespec.Index
+		if err = json.Unmarshal(p, &idx); err != nil {
+			return nil, err
+		}
+		for _, m := range idx.Manifests {
+			if m.MediaType == images.MediaTypeContainerd1CheckpointConfig {
+				isCheckpoint = true
+				id = m.Digest.String()
+				break
+			}
+		}
+	}
+	config, err = i.Config(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "get image config descriptor")
 	}
-	id := desc.Digest.String()
-
-	rb, err := content.ReadBlob(ctx, i.ContentStore(), desc)
+	if !isCheckpoint {
+		id = config.Digest.String()
+	}
+	rb, err := content.ReadBlob(ctx, i.ContentStore(), config)
 	if err != nil {
 		return nil, errors.Wrap(err, "read image config from content store")
 	}
-	var ociimage imagespec.Image
 	if err := json.Unmarshal(rb, &ociimage); err != nil {
 		return nil, errors.Wrapf(err, "unmarshal image config %s", rb)
 	}
