@@ -48,7 +48,7 @@ func NewContainer(ctx context.Context, platform stdio.Platform, r *task.CreateTa
 	if err != nil {
 		return nil, errors.Wrap(err, "create namespace")
 	}
-	er, err := ParseExternalResources(r.ExternalResources)
+	er, err := external.Parse(r.ExternalResources)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse external namspaces")
 	}

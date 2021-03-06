@@ -21,10 +21,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"path"
 	"path/filepath"
 
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/events/exchange"
+	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/mount"
@@ -33,7 +36,10 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/runtime"
+	ptypes "github.com/gogo/protobuf/types"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/pkg/errors"
 )
 
 // Config for the v2 runtime
@@ -124,6 +130,12 @@ func (m *TaskManager) Create(ctx context.Context, id string, opts runtime.Create
 	bundle, err := NewBundle(ctx, m.root, m.state, id, opts.Spec.Value)
 	if err != nil {
 		return nil, err
+	}
+	if opts.ExternalResources != nil {
+		// try to mount external rootfs to bundle's rootfs
+		if err = populateRootfsWithExternal(bundle.Path, opts.ExternalResources); err != nil {
+			return nil, errors.Wrap(err, "failed to mount external rootfs")
+		}
 	}
 	defer func() {
 		if err != nil {
@@ -317,4 +329,21 @@ func parsePlatforms(platformStr []string) ([]ocispec.Platform, error) {
 		p[i] = parsed
 	}
 	return p, nil
+}
+
+func populateRootfsWithExternal(bundle string, externalResources *ptypes.Any) error {
+	er, err := external.Parse(externalResources)
+	if err != nil {
+		return err
+	}
+	namespaces := er.Namespaces
+	info, exists := namespaces[specs.MountNamespace]
+	if !exists {
+		return nil
+	}
+	rootfs := path.Join(bundle, "rootfs")
+	externalRootfs := path.Join(info.Info.(string), "rootfs")
+	// mount the external rootfs on rootfs
+	cmd := exec.Command("nsenter", "--mount="+info.Path, "mount", "-R", externalRootfs, rootfs)
+	return cmd.Run()
 }

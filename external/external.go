@@ -3,6 +3,8 @@ package external
 import (
 	"github.com/YLonely/cer-manager/api/types"
 	"github.com/YLonely/cer-manager/client"
+	"github.com/containerd/typeurl"
+	ptypes "github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 )
@@ -77,4 +79,21 @@ func NamespaceType(t specs.LinuxNamespaceType) (types.NamespaceType, error) {
 		return tt, errors.New("unsupported namespace type")
 	}
 	return tt, nil
+}
+
+func Parse(any *ptypes.Any) (*ResourcesInfo, error) {
+	if any == nil {
+		return nil, nil
+	}
+	var i interface{}
+	var err error
+	i, err = typeurl.UnmarshalAny(any)
+	if err != nil {
+		return nil, err
+	}
+	ret, ok := i.(*ResourcesInfo)
+	if !ok {
+		return nil, errors.New("can't convert any to ExternalResources")
+	}
+	return ret, nil
 }

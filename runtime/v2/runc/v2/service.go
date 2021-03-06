@@ -312,10 +312,6 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := populateRootfsWithExternal(r.Bundle, r.ExternalResources); err != nil {
-		return nil, err
-	}
-
 	container, err := runc.NewContainer(ctx, s.platform, r)
 	if err != nil {
 		return nil, err
@@ -837,26 +833,6 @@ func (s *service) initPlatform() error {
 	}
 	s.platform = p
 	return nil
-}
-
-func populateRootfsWithExternal(bundle string, externalResources *ptypes.Any) error {
-	if externalResources == nil {
-		return nil
-	}
-	er, err := runc.ParseExternalResources(externalResources)
-	if err != nil {
-		return err
-	}
-	namespaces := er.Namespaces
-	info, exists := namespaces[specs.MountNamespace]
-	if !exists {
-		return nil
-	}
-	rootfs := path.Join(bundle, "rootfs")
-	externalRootfs := path.Join(info.Info.(string), "rootfs")
-	// mount the external rootfs on rootfs
-	cmd := exec.Command("nsenter", "--mount="+info.Path, "mount", "-R", externalRootfs, rootfs)
-	return cmd.Run()
 }
 
 func depopulateRootfsOfExternal(bundle, mountNamespacePath string) error {

@@ -25,13 +25,9 @@ import (
 	"path/filepath"
 
 	"github.com/containerd/containerd/api/events"
-	"github.com/containerd/containerd/external"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/runtime"
-	"github.com/containerd/typeurl"
-	"github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -86,21 +82,4 @@ func ShouldKillAllOnExit(ctx context.Context, bundlePath string) bool {
 		}
 	}
 	return true
-}
-
-func ParseExternalResources(any *types.Any) (*external.ResourcesInfo, error) {
-	if any == nil {
-		return nil, nil
-	}
-	var i interface{}
-	var err error
-	i, err = typeurl.UnmarshalAny(any)
-	if err != nil {
-		return nil, err
-	}
-	ret, ok := i.(*external.ResourcesInfo)
-	if !ok {
-		return nil, errors.New("can't convert any to ExternalResources")
-	}
-	return ret, nil
 }
