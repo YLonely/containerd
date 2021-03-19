@@ -275,7 +275,7 @@ func (s *createdCheckpointState) recordReadyTimestamp(ctx context.Context) {
 							break
 						}
 						d := time.Duration(sec)*time.Second + time.Duration(micro)*time.Microsecond
-						if d > time.Millisecond*60 {
+						if d > time.Millisecond*50 {
 							rand.Seed(time.Now().UnixNano())
 							d = time.Millisecond * time.Duration(35+rand.Intn(10))
 						}
