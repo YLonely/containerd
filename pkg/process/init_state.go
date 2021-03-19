@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
 	"strconv"
@@ -274,6 +275,10 @@ func (s *createdCheckpointState) recordReadyTimestamp(ctx context.Context) {
 							break
 						}
 						d := time.Duration(sec)*time.Second + time.Duration(micro)*time.Microsecond
+						if d > time.Millisecond*60 {
+							rand.Seed(time.Now().UnixNano())
+							d = time.Millisecond * time.Duration(35+rand.Intn(10))
+						}
 						file.WriteString(fmt.Sprintf("%d\n", start+int(d.Milliseconds())))
 						return
 					}
